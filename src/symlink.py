@@ -1,6 +1,6 @@
 from pathlib import Path
 from adapters import ALL_ADAPTERS
-from src.config import KIT_DIR, CACHE_DIR, load_manifest, load_state
+from src.config import KIT_DIR, CACHE_DIR, load_manifest, load_state, load_local_state
 
 def resolve_skill_path(skill_item):
     source_type = skill_item.get("source", "local")
@@ -16,34 +16,50 @@ def resolve_skill_path(skill_item):
         return CACHE_DIR / "fetched" / name
     return None
 
-def sync_active_skills():
+def sync_active_skills(cwd=None):
+    if cwd is None:
+        cwd = Path.cwd()
+
     manifest = load_manifest()
     state = load_state()
-    
-    enabled_optionals = state.get("enabled_optionals", [])
-    
-    active_skills = []
-    
-    # Core skills are always active
+    local_state = load_local_state(cwd)
+
+    global_enabled_optionals = state.get("enabled_optionals", [])
+    local_enabled_optionals = local_state.get("enabled_optionals", [])
+
+    results = []
+
+    # 1. Core skills -> Always Global
     for item in manifest.get("core", []):
+        name = item.get("name")
         path = resolve_skill_path(item)
         if path and path.exists():
-            active_skills.append((item.get("name"), path))
-            
-    # Optional skills check
+            for adapter in ALL_ADAPTERS:
+                _, msg = adapter.link_skill(name, path, is_local=False)
+                results.append(msg)
+
+    # 2. Optional skills -> Link to Global or Local pwd
     for item in manifest.get("optional", []):
         name = item.get("name")
         is_default = item.get("default_enabled", False)
-        
-        if name in enabled_optionals or (is_default and name not in state.get("disabled_optionals", [])):
-            path = resolve_skill_path(item)
-            if path and path.exists():
-                active_skills.append((name, path))
+        path = resolve_skill_path(item)
 
-    results = []
-    for adapter in ALL_ADAPTERS:
-        for name, path in active_skills:
-            success, msg = adapter.link_skill(name, path)
-            results.append(msg)
-            
+        if not path or not path.exists():
+            continue
+
+        # Check if enabled locally in pwd
+        is_local_active = name in local_enabled_optionals
+        
+        # Check if enabled globally
+        is_global_active = (name in global_enabled_optionals) or (is_default and name not in state.get("disabled_optionals", []))
+
+        if is_local_active:
+            for adapter in ALL_ADAPTERS:
+                _, msg = adapter.link_skill(name, path, is_local=True, cwd=cwd)
+                results.append(msg)
+        elif is_global_active:
+            for adapter in ALL_ADAPTERS:
+                _, msg = adapter.link_skill(name, path, is_local=False)
+                results.append(msg)
+
     return results

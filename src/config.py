@@ -89,3 +89,22 @@ def save_state(state):
     STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
     with open(STATE_FILE, 'w', encoding='utf-8') as f:
         json.dump(state, f, indent=2, ensure_ascii=False)
+
+def load_local_state(cwd=None):
+    if cwd is None:
+        cwd = Path.cwd()
+    local_file = Path(cwd) / ".mykit.json"
+    if local_file.exists():
+        try:
+            with open(local_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {"enabled_optionals": []}
+
+def save_local_state(state, cwd=None):
+    if cwd is None:
+        cwd = Path.cwd()
+    local_file = Path(cwd) / ".mykit.json"
+    with open(local_file, 'w', encoding='utf-8') as f:
+        json.dump(state, f, indent=2, ensure_ascii=False)
