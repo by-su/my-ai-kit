@@ -18,10 +18,25 @@
 | `mykit install <skill-name> --global` | Optional 스킬을 전역(Global) 스코프로 설치 |
 | `mykit remove <skill-name>` | 현재 작업 중인 프로젝트 디렉터리(`pwd`)에서 Optional 스킬 제거 |
 | `mykit sync` | `manifest.yaml` 기반 스택 프로필, 활성화된 MCP, 커스텀 서브 에이전트, Core/Local 스킬 전체 동기화 |
+| `mykit completion install` | **Zsh / Bash 터미널 자동 완성(Tab Completion)** 1초 등록 |
 | `mykit update [skill-name]` | 외부 GitHub 스킬 최신 커밋으로 업데이트 및 Lockfile 갱신 |
 | `mykit lint [--fix]` | 스킬 YAML 문법, 이름 중복 충돌 및 깨진 심볼릭 링크 자동 점검 (`--fix` 옵션으로 유령 링크 자동 정리) |
 | `mykit dedupe [threshold]` | 스킬 간 키워드/내용 겹침을 분석하여 유사 중복 스킬 탐지 (기본 30%) |
 | `mykit doctor` | 설정 파일 검증, MCP 헬스체크/시크릿 키 진단 및 에이전트별 연결 상태 점검 |
+
+---
+
+## ⌨️ 터미널 자동 완성 (Tab Completion)
+
+터미널에서 `mykit <Tab>` 키를 누르면 모든 명령어와 스킬 이름이 **자동 완성**됩니다.
+
+```bash
+# 1. 자동 완성 1초 등록
+mykit completion install
+
+# 2. 터미널 갱신
+source ~/.zshrc
+```
 
 ---
 
@@ -31,12 +46,6 @@
 
 * `agents/reviewer.md`: 시니어 코드 리뷰어 서브 에이전트
 * `agents/architect.md`: 시스템 아키텍트 서브 에이전트
-
-```text
-my-ai-kit/agents/reviewer.md ──(mykit sync)──> ~/.claude/agents/reviewer.md
-                                          └──> ~/.gemini/antigravity-cli/agents/reviewer.md
-                                          └──> ~/.codex/agents/reviewer.md
-```
 
 ---
 
@@ -74,6 +83,15 @@ mykit stack use full
 
 ---
 
+## 📂 스코프(Scope) 분리 아키텍처
+
+* **Core 스킬 (Global Scope)**:  
+  어디서나 항상 필요한 필수 스킬로, 사용자 홈 디렉터리(`~/.claude/plugins/`, `~/.gemini/antigravity-cli/skills/`)로 전역 배포됩니다.
+* **Optional 스킬 (Local `pwd` Scope)**:  
+  프로젝트별로 선택해서 쓰는 스킬로, **내가 현재 위치한 프로젝트 디렉터리(`pwd`)의 `.claude/skills/`, `.gemini/skills/` 내부로만 심볼릭 링크**가 생성되어 해당 프로젝트를 열었을 때만 AI가 읽습니다.
+
+---
+
 ## 📂 디렉터리 구성 및 역할
 
 ```text
@@ -84,8 +102,7 @@ my-ai-kit/
 ├── bootstrap.sh                 # 새 컴퓨터 1-Line 초기화 스크립트
 ├── .env.example                 # MCP API 키/시크릿 보관용 템플릿
 ├── agents/                      # 커스텀 서브 에이전트 페르소나 정의 (reviewer.md, architect.md 등)
-│   ├── reviewer.md
-│   └── architect.md
+├── completions/                 # Zsh / Bash 터미널 자동 완성 스크립트
 ├── bin/
 │   └── mykit                    # 메인 CLI 실행 파일
 ├── core/                        # 항상 전역으로 설치되는 자체 Core 스크립트/스킬
@@ -93,7 +110,7 @@ my-ai-kit/
 ├── optional/                    # 필요 시 프로젝트(`pwd`)별로 설치하는 Optional 스크립트/스킬
 │   └── db-helper/SKILL.md
 ├── adapters/                    # 에이전트별(Antigravity, Claude, Codex) 전역/로컬 자동 링크 어댑터
-└── src/                         # CLI 엔진 (Config, Symlink, Fetcher, MCP, Linter, Dedupe, Pruner)
+└── src/                         # CLI 엔진 (Config, Symlink, Fetcher, MCP, Linter, Dedupe, Pruner, Completion)
 ```
 
 ---
