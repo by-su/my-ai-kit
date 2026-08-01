@@ -11,6 +11,7 @@ from src.config import load_manifest, load_state, save_state, load_lockfile
 from src.symlink import sync_active_skills, resolve_skill_path
 from src.fetcher import fetch_skill_repo, update_skill_repo
 from src.mcp import sync_mcp_servers
+from src.linter import run_linter
 from adapters import ALL_ADAPTERS
 
 def cmd_list():
@@ -144,7 +145,7 @@ def cmd_doctor():
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: mykit [list|install|remove|sync|update|doctor|bootstrap]")
+        print("Usage: mykit [list|install|remove|sync|update|lint|doctor|bootstrap]")
         sys.exit(1)
 
     cmd = sys.argv[1]
@@ -166,6 +167,9 @@ def main():
     elif cmd == "update":
         target = sys.argv[2] if len(sys.argv) >= 3 else None
         cmd_update(target)
+    elif cmd == "lint":
+        fix_option = "--fix" in sys.argv
+        run_linter(fix=fix_option)
     elif cmd == "doctor":
         cmd_doctor()
     else:

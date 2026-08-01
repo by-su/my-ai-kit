@@ -11,11 +11,12 @@
 
 | 명령어 | 설명 |
 | :--- | :--- |
-| `mykit list` | 현재 설치된 Core 스킬 및 Optional 스킬의 활성화 상태 조회 |
+| `mykit list` | 현재 설치된 MCP 서버 목록, Core 스킬 및 Optional 스킬의 활성화 상태 조회 |
 | `mykit install <skill-name>` | Optional 스킬 활성화 및 심볼릭 링크 동기화 |
 | `mykit remove <skill-name>` | Optional 스킬 비활성화 (링크 제거) |
-| `mykit sync` | `manifest.yaml` 및 `manifest.lock.json` 기반 전체 동기화 |
+| `mykit sync` | `manifest.yaml` 및 `manifest.lock.json` 기반 스킬 및 MCP 전체 동기화 |
 | `mykit update [skill-name]` | 외부 GitHub 스킬 최신 커밋으로 업데이트 및 Lockfile 갱신 |
+| `mykit lint [--fix]` | 스킬 YAML 문법, 이름 중복 충돌 및 깨진 심볼릭 링크 자동 점검 (`--fix` 옵션으로 유령 링크 자동 정리) |
 | `mykit doctor` | 설정 파일 검증 및 에이전트별 심볼릭 링크 연결 상태 진단 |
 
 ---
@@ -25,7 +26,7 @@
 ```text
 my-ai-kit/
 ├── README.md                    # 사용 가이드 및 명령어 치트시트
-├── manifest.yaml                # 중앙 관리 마니페스트 (Core/Optional 지정)
+├── manifest.yaml                # 중앙 관리 마니페스트 (Core/Optional/MCP 지정)
 ├── manifest.lock.json           # 외부 GitHub 스킬 커밋 SHA 고정 장부
 ├── bootstrap.sh                 # 새 컴퓨터 1-Line 초기화 스크립트
 ├── bin/
@@ -35,7 +36,7 @@ my-ai-kit/
 ├── optional/                    # 선택형 자체 Optional 스크립트/스킬
 │   └── db-helper/SKILL.md
 ├── adapters/                    # 에이전트별(Antigravity, Claude, Codex) 자동 링크 어댑터
-└── src/                         # CLI 엔진 (Config, Symlink, Fetcher)
+└── src/                         # CLI 엔진 (Config, Symlink, Fetcher, MCP, Linter)
 ```
 
 ---
@@ -61,7 +62,7 @@ my-ai-kit/
        path: "optional/my-custom-skill"
        default_enabled: true
    ```
-3. `mykit sync` 실행으로 에이전트에 반영!
+3. `mykit lint`로 문법 및 이름 충돌 검사 후 `mykit sync` 실행!
 
 ---
 
