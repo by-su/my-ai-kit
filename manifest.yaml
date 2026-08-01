@@ -5,7 +5,49 @@ global:
   mcp_servers:
     context7:
       command: "npx"
-      args: ["-y", "@context7/mcp-server"]
+      args:
+        - "-y"
+        - "@context7/mcp-server"
+
+    github:
+      command: "npx"
+      args:
+        - "-y"
+        - "@modelcontextprotocol/server-github"
+      env:
+        GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN}"
+
+    google-docs:
+      command: "npx"
+      args:
+        - "-y"
+        - "@a-bonus/google-docs-mcp"
+      env:
+        GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID}"
+        GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET}"
+
+    google-slides:
+      command: "npx"
+      args:
+        - "-y"
+        - "@a-bonus/google-slides-mcp"
+
+    mysql:
+      command: "npx"
+      args:
+        - "-y"
+        - "@modelcontextprotocol/server-mysql"
+      env:
+        MYSQL_HOST: "${MYSQL_HOST}"
+        MYSQL_USER: "${MYSQL_USER}"
+        MYSQL_PASSWORD: "${MYSQL_PASSWORD}"
+        MYSQL_DATABASE: "${MYSQL_DATABASE}"
+
+    playwright:
+      command: "npx"
+      args:
+        - "-y"
+        - "@modelcontextprotocol/server-playwright"
 
 # 항상 자동 설치되는 Core 스크립트 & 스킬
 core:
@@ -21,7 +63,6 @@ optional:
     path: "optional/db-helper"
     default_enabled: true
 
-  # 오픈소스 외부 스킬 예시 (auto_update: true 설정으로 최신 버전을 자동으로 추종)
   - name: "sample-open-skill"
     description: "오픈소스 AI 스킬 팩 (자동 업데이트 지원)"
     source: "github"
