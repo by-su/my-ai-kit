@@ -9,25 +9,29 @@ sys.path.insert(0, str(KIT_DIR))
 
 from src.config import (
     load_manifest, load_state, save_state, load_lockfile,
-    load_local_state, save_local_state
+    load_local_state, save_local_state, get_active_profile, set_active_profile
 )
 from src.symlink import sync_active_skills, resolve_skill_path
 from src.fetcher import fetch_skill_repo, update_skill_repo
 from src.mcp import sync_mcp_servers
 from src.linter import run_linter
 from src.dedupe import run_dedupe
+from src.pruner import prune_skills_for_profile
 from adapters import ALL_ADAPTERS
 
 def cmd_list():
     manifest = load_manifest()
     state = load_state()
     local_state = load_local_state()
+    active_profile = get_active_profile()
 
     global_enabled = set(state.get("enabled_optionals", []))
     local_enabled = set(local_state.get("enabled_optionals", []))
     disabled_optionals = set(state.get("disabled_optionals", []))
 
-    print("\033[1;34m[MCP Servers (Global)]\033[0m")
+    print(f"\033[1;36m[Active Stack Profile: {active_profile}]\033[0m")
+
+    print("\n\033[1;34m[MCP Servers (Global)]\033[0m")
     mcps = manifest.get("global", {}).get("mcp_servers", {})
     for name in mcps:
         print(f"  ⚡ {name}")
@@ -60,6 +64,33 @@ def cmd_list():
             mark = "[Off]"
 
         print(f"  {mark} {name} ({src}){auto_up} - {desc}")
+
+def cmd_stack(args):
+    manifest = load_manifest()
+    profiles = manifest.get("profiles", {})
+    active_profile = get_active_profile()
+
+    if not args or args[0] in ("list", "status"):
+        print(f"\033[1;36m--- Active Stack Profile: {active_profile} ---\033[0m\n")
+        print("Available Profiles:")
+        for name, info in profiles.items():
+            current = " \033[1;32m(active)\033[0m" if name == active_profile else ""
+            desc = info.get("description", "")
+            print(f"  • \033[1;34m{name}\033[0m{current}: {desc}")
+        print("\nTo switch profile: \033[1mmykit stack use <personal|work|full>\033[0m")
+    elif args[0] in ("use", "set"):
+        if len(args) < 2:
+            print("Usage: mykit stack use <profile_name>")
+            sys.exit(1)
+        target_profile = args[1]
+        if target_profile not in profiles:
+            print(f"\033[1;31mError:\033[0m Profile '{target_profile}' not found in manifest.yaml")
+            print(f"Available profiles: {', '.join(profiles.keys())}")
+            sys.exit(1)
+
+        set_active_profile(target_profile)
+        print(f"✅ Switched active stack profile to '\033[1;32m{target_profile}\033[0m'")
+        cmd_sync()
 
 def cmd_enable(skill_name, is_global=False):
     manifest = load_manifest()
@@ -121,8 +152,16 @@ def cmd_disable(skill_name, is_global=False):
 def cmd_sync():
     manifest = load_manifest()
     lockfile = load_lockfile()
-    
-    # Fetch github skills first
+    active_profile = get_active_profile()
+
+    # 1. Prune ECC suite according to active profile
+    ecc_base = Path("~/.claude/plugins/cache/ecc/ecc/2.0.0").expanduser()
+    ecc_target = Path("~/.agent-skills/store/ecc-pruned-skills").expanduser()
+    if ecc_base.exists():
+        inc, exc = prune_skills_for_profile(ecc_base, ecc_target, active_profile)
+        print(f"⚡ Stack Profile '\033[1;36m{active_profile}\033[0m': Loaded {len(inc)} skills ({len(exc)} excluded)")
+
+    # 2. Fetch github skills
     all_skills = manifest.get("core", []) + manifest.get("optional", [])
     for item in all_skills:
         if item.get("source") == "github":
@@ -132,10 +171,10 @@ def cmd_sync():
             commit_sha = lockfile.get("skills", {}).get(name, {}).get("commit")
             fetch_skill_repo(name, url, commit_sha, auto_update=auto_update)
 
-    # Sync MCPs
+    # 3. Sync MCPs
     mcp_results = sync_mcp_servers()
 
-    # Sync symlinks (both global & pwd local)
+    # 4. Sync symlinks (both global & pwd local)
     results = sync_active_skills(cwd=Path.cwd())
     print("\033[1;32m✓ Synchronized skills and MCPs across all adapters:\033[0m")
     for r in mcp_results:
@@ -165,6 +204,8 @@ def cmd_doctor():
     print("\033[1;36m--- Running mykit doctor ---\033[0m")
     manifest = load_manifest()
     mcps = manifest.get("global", {}).get("mcp_servers", {})
+    active_profile = get_active_profile()
+    print(f"✓ Active profile: {active_profile}")
     print(f"✓ Manifest loaded cleanly ({len(mcps)} MCPs, {len(manifest.get('core', []))} core, {len(manifest.get('optional', []))} optional)")
     
     lockfile = load_lockfile()
@@ -177,13 +218,15 @@ def cmd_doctor():
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: mykit [list|install|remove|sync|update|lint|dedupe|doctor|bootstrap]")
+        print("Usage: mykit [list|stack|install|remove|sync|update|lint|dedupe|doctor|bootstrap]")
         sys.exit(1)
 
     cmd = sys.argv[1]
 
     if cmd == "list":
         cmd_list()
+    elif cmd == "stack":
+        cmd_stack(sys.argv[2:])
     elif cmd in ("install", "enable"):
         if len(sys.argv) < 3:
             print("Usage: mykit install <skill-name> [--global]")

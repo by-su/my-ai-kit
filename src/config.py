@@ -83,12 +83,21 @@ def load_state():
     if STATE_FILE.exists():
         with open(STATE_FILE, 'r', encoding='utf-8') as f:
             return json.load(f)
-    return {"enabled_optionals": []}
+    return {"enabled_optionals": [], "active_profile": "personal"}
 
 def save_state(state):
     STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
     with open(STATE_FILE, 'w', encoding='utf-8') as f:
         json.dump(state, f, indent=2, ensure_ascii=False)
+
+def get_active_profile():
+    state = load_state()
+    return state.get("active_profile", "personal")
+
+def set_active_profile(profile_name):
+    state = load_state()
+    state["active_profile"] = profile_name
+    save_state(state)
 
 def load_local_state(cwd=None):
     if cwd is None:
