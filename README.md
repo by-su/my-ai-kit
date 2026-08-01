@@ -12,17 +12,59 @@
 | 명령어 | 설명 |
 | :--- | :--- |
 | `mykit list` | 활성화된 스택 프로필, MCP 서버, 커스텀 서브 에이전트(`agents/*.md`), Core 및 Local 스킬 조회 |
+| `mykit stats` | **시스템 전체 통계 대시보드 (스킬 감축률, 토큰 절약량, 에이전트 연결 현황)** |
+| `mykit env setup` | **MCP API 키 및 시크릿 인터랙티브 자동 대화형 등록 마법사** |
 | `mykit mcp` | 등록된 MCP 서버 활성화 상태 조회 및 토글 (`mykit mcp enable \| disable <mcp-name>`) |
 | `mykit stack` | 현재 스택 프로필 조회 및 전환 (`mykit stack use personal \| work \| full`) |
 | `mykit install <skill-name>` | **현재 작업 중인 프로젝트 디렉터리(`pwd`)** 내부로 Optional 스킬 설치 (`.claude/skills`, `.gemini/skills`) |
 | `mykit install <skill-name> --global` | Optional 스킬을 전역(Global) 스코프로 설치 |
 | `mykit remove <skill-name>` | 현재 작업 중인 프로젝트 디렉터리(`pwd`)에서 Optional 스킬 제거 |
 | `mykit sync` | `manifest.yaml` 기반 스택 프로필, 활성화된 MCP, 커스텀 서브 에이전트, Core/Local 스킬 전체 동기화 |
-| `mykit completion install` | **Zsh / Bash 터미널 자동 완성(Tab Completion)** 1초 등록 |
+| `mykit completion install` | Zsh / Bash 터미널 자동 완성(Tab Completion) 1초 등록 |
 | `mykit update [skill-name]` | 외부 GitHub 스킬 최신 커밋으로 업데이트 및 Lockfile 갱신 |
 | `mykit lint [--fix]` | 스킬 YAML 문법, 이름 중복 충돌 및 깨진 심볼릭 링크 자동 점검 (`--fix` 옵션으로 유령 링크 자동 정리) |
 | `mykit dedupe [threshold]` | 스킬 간 키워드/내용 겹침을 분석하여 유사 중복 스킬 탐지 (기본 30%) |
 | `mykit doctor` | 설정 파일 검증, MCP 헬스체크/시크릿 키 진단 및 에이전트별 연결 상태 점검 |
+
+---
+
+## 📊 통계 대시보드 (`mykit stats`)
+
+내 맥북의 전체 AI 스킬 절감율, 예상 토큰 절약량, 에이전트 연결 현황을 한눈에 시각화합니다.
+
+```bash
+mykit stats
+```
+
+```text
+┌──────────────────────────────────────────────────────────────┐
+│         🧰 my-ai-kit System & Performance Analytics        │
+├──────────────────────────────────────────────────────────────┤
+│  • Active Profile: personal                                 │
+│  • Total Original Skills: 271                                 │
+│  • Profile Filtered Skills: 212                               │
+│  • Skill Reduction Rate: 21.8%                                 │
+│  • Est. Token Savings: ~1,770 Tokens / Session          │
+├──────────────────────────────────────────────────────────────┤
+│  • Active MCP Servers: 6  / 8  (Disabled: 2)               │
+│  • Custom Subagents: 2  personas (agents/*.md)                 │
+├──────────────────────────────────────────────────────────────┤
+│  [Connected Target Adapters]                                 │
+│  ✓ Antigravity/Gemini -> 5   skills | 2  agents          │
+│  ✓ Claude Code        -> 12  skills | 68 agents          │
+│  ✓ OpenAI Codex       -> 10  skills | 2  agents          │
+└──────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🔑 MCP 시크릿 자동 등록 마법사 (`mykit env setup`)
+
+터미널에서 대화형 마법사로 API 키를 안전하게 세팅할 수 있습니다.
+
+```bash
+mykit env setup
+```
 
 ---
 
@@ -83,15 +125,6 @@ mykit stack use full
 
 ---
 
-## 📂 스코프(Scope) 분리 아키텍처
-
-* **Core 스킬 (Global Scope)**:  
-  어디서나 항상 필요한 필수 스킬로, 사용자 홈 디렉터리(`~/.claude/plugins/`, `~/.gemini/antigravity-cli/skills/`)로 전역 배포됩니다.
-* **Optional 스킬 (Local `pwd` Scope)**:  
-  프로젝트별로 선택해서 쓰는 스킬로, **내가 현재 위치한 프로젝트 디렉터리(`pwd`)의 `.claude/skills/`, `.gemini/skills/` 내부로만 심볼릭 링크**가 생성되어 해당 프로젝트를 열었을 때만 AI가 읽습니다.
-
----
-
 ## 📂 디렉터리 구성 및 역할
 
 ```text
@@ -110,7 +143,7 @@ my-ai-kit/
 ├── optional/                    # 필요 시 프로젝트(`pwd`)별로 설치하는 Optional 스크립트/스킬
 │   └── db-helper/SKILL.md
 ├── adapters/                    # 에이전트별(Antigravity, Claude, Codex) 전역/로컬 자동 링크 어댑터
-└── src/                         # CLI 엔진 (Config, Symlink, Fetcher, MCP, Linter, Dedupe, Pruner, Completion)
+└── src/                         # CLI 엔진 (Config, Symlink, Fetcher, MCP, Linter, Dedupe, Pruner, Completion, Dashboard)
 ```
 
 ---

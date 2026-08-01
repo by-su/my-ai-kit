@@ -18,6 +18,8 @@ _mykit() {
             local -a commands
             commands=(
                 'list:Show status of MCPs, custom agents, core and optional skills'
+                'stats:View system analytics, token savings, and adapter connectivity'
+                'env:Interactive setup wizard for MCP API keys and secrets'
                 'stack:View or switch stack profiles (personal, work, full)'
                 'mcp:View or toggle MCP servers (enable, disable)'
                 'install:Install optional skill to pwd (or --global)'
@@ -49,10 +51,13 @@ _mykit() {
                         local -a mcp_cmds
                         mcp_cmds=('enable' 'disable' 'list')
                         _describe -t mcp_cmds 'mcp command' mcp_cmds
-                    elif [[ $#words -eq 4 ]]; then
-                        local -a mcps
-                        mcps=($(mykit_get_mcps))
-                        _describe -t mcps 'mcp server' mcps
+                    fi
+                    ;;
+                env)
+                    if [[ $#words -eq 3 ]]; then
+                        local -a env_cmds
+                        env_cmds=('setup')
+                        _describe -t env_cmds 'env command' env_cmds
                     fi
                     ;;
                 install|enable|remove|disable)
@@ -91,7 +96,7 @@ _mykit_completions() {
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-    opts="list stack mcp install remove sync update lint dedupe doctor completion"
+    opts="list stats env stack mcp install remove sync update lint dedupe doctor completion"
 
     if [ $COMP_CWORD -eq 1 ]; then
         COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
@@ -105,6 +110,10 @@ _mykit_completions() {
             ;;
         mcp)
             COMPREPLY=( $(compgen -W "enable disable list context7 github google-docs google-slides mysql playwright memory brave-search" -- ${cur}) )
+            return 0
+            ;;
+        env)
+            COMPREPLY=( $(compgen -W "setup" -- ${cur}) )
             return 0
             ;;
         install|remove)

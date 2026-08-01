@@ -18,6 +18,7 @@ from src.linter import run_linter
 from src.dedupe import run_dedupe
 from src.pruner import prune_skills_for_profile
 from src.completion import generate_completion, install_completion
+from src.dashboard import setup_env_interactive, show_stats
 from adapters import ALL_ADAPTERS
 
 def cmd_list():
@@ -283,13 +284,22 @@ def cmd_doctor():
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: mykit [list|mcp|stack|install|remove|sync|update|lint|dedupe|doctor|completion|bootstrap]")
+        print("Usage: mykit [list|stats|env|mcp|stack|install|remove|sync|update|lint|dedupe|doctor|completion|bootstrap]")
         sys.exit(1)
 
     cmd = sys.argv[1]
 
     if cmd == "list":
         cmd_list()
+    elif cmd == "stats":
+        show_stats()
+    elif cmd in ("env", "secret", "secrets"):
+        sub = sys.argv[2] if len(sys.argv) >= 3 else "setup"
+        if sub in ("setup", "init", "set"):
+            setup_env_interactive()
+            cmd_sync()
+        else:
+            print("Usage: mykit env setup")
     elif cmd == "mcp":
         cmd_mcp(sys.argv[2:])
     elif cmd == "stack":
