@@ -5,6 +5,10 @@
     "sample-open-skill": {
       "url": "https://github.com/anthropics/anthropic-quickstarts.git",
       "commit": "370e18d4a20ff5fd4bc1a6bf11d5105b2383977c"
+    },
+    "prompt-architect": {
+      "url": "https://github.com/ckelsoe/prompt-architect.git",
+      "commit": "6c7a2c7b5a15cbb918828c7878c226a592985702"
     }
   }
 }

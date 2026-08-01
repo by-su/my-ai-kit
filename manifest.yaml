@@ -83,6 +83,13 @@ optional:
     path: "~/.claude/plugins/cache/ecc/ecc/2.0.0/skills"
     default_enabled: true
 
+  - name: "prompt-architect"
+    description: "프롬프트 아키텍팅 & 시스템 지침 설계 스킬 (필요 시 온디맨드 설치)"
+    source: "github"
+    url: "https://github.com/ckelsoe/prompt-architect.git"
+    auto_update: true
+    default_enabled: false
+
 # 동기화할 에이전트 대상
 targets:
   claude_code: true
