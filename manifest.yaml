@@ -1,5 +1,29 @@
 version: "1.0"
 
+# 안전한 명령어 자동 승인 목록 (매번 허락 묻지 않음!)
+auto_approve_commands:
+  - "git"
+  - "ls"
+  - "cat"
+  - "head"
+  - "tail"
+  - "grep"
+  - "rg"
+  - "find"
+  - "pwd"
+  - "echo"
+  - "python3"
+  - "python"
+  - "node"
+  - "npx"
+  - "npm test"
+  - "npm run build"
+  - "npm run dev"
+  - "yarn test"
+  - "pnpm test"
+  - "pytest"
+  - "mykit"
+
 # 에이전트 공통 설정 / MCP 관리
 global:
   mcp_servers:

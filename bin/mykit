@@ -14,6 +14,7 @@ from src.config import (
 from src.symlink import sync_active_skills, resolve_skill_path
 from src.fetcher import fetch_skill_repo, update_skill_repo
 from src.mcp import sync_mcp_servers, check_mcp_health, get_mcp_states
+from src.permissions import sync_auto_approve_permissions
 from src.linter import run_linter
 from src.dedupe import run_dedupe
 from src.pruner import prune_skills_for_profile
@@ -232,10 +233,15 @@ def cmd_sync():
     # 3. Sync MCPs
     mcp_results = sync_mcp_servers()
 
-    # 4. Sync symlinks (both global & pwd local skills + custom agents)
+    # 4. Sync Permissions (Auto-approve commands)
+    perm_results = sync_auto_approve_permissions()
+
+    # 5. Sync symlinks (both global & pwd local skills + custom agents)
     results = sync_active_skills(cwd=Path.cwd())
-    print("\033[1;32m✓ Synchronized skills, custom agents, and MCPs across all adapters:\033[0m")
+    print("\033[1;32m✓ Synchronized skills, custom agents, permissions, and MCPs across all adapters:\033[0m")
     for r in mcp_results:
+        print(f"  - {r}")
+    for r in perm_results:
         print(f"  - {r}")
     for r in results:
         print(f"  - {r}")
@@ -262,9 +268,10 @@ def cmd_doctor():
     print("\033[1;36m--- Running mykit doctor ---\033[0m")
     manifest = load_manifest()
     mcps = manifest.get("global", {}).get("mcp_servers", {})
+    auto_cmds = manifest.get("auto_approve_commands", [])
     active_profile = get_active_profile()
     print(f"✓ Active profile: {active_profile}")
-    print(f"✓ Manifest loaded cleanly ({len(mcps)} MCPs, {len(manifest.get('core', []))} core, {len(manifest.get('optional', []))} optional)")
+    print(f"✓ Manifest loaded cleanly ({len(mcps)} MCPs, {len(auto_cmds)} auto-approve commands, {len(manifest.get('core', []))} core, {len(manifest.get('optional', []))} optional)")
     
     lockfile = load_lockfile()
     print(f"✓ Lockfile loaded ({len(lockfile.get('skills', {}))} locked repos)")
@@ -273,6 +280,9 @@ def cmd_doctor():
     reports = check_mcp_health()
     for name, cmd, status, missing in reports:
         print(f"  • {name} (cmd: {cmd}) -> {status}")
+
+    print("\n\033[1;34m[Auto-Approved Command Allowlist]\033[0m")
+    print(f"  🛡️ {len(auto_cmds)} pre-approved safe commands: {', '.join(auto_cmds[:10])}...")
 
     print("\n\033[1;34m[AI Agent Target Adapters]\033[0m")
     for adapter in ALL_ADAPTERS:
@@ -317,7 +327,7 @@ def main():
     elif cmd in ("remove", "disable"):
         if len(sys.argv) < 3:
             print("Usage: mykit remove <skill-name> [--global]")
-            sys.exit(1)
+            sys.argv[1]
         is_global = "--global" in sys.argv
         skill_name = sys.argv[2] if sys.argv[2] != "--global" else sys.argv[3]
         cmd_disable(skill_name, is_global=is_global)
