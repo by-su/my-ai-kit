@@ -47,10 +47,7 @@ def sync_active_skills(cwd=None):
         if not path or not path.exists():
             continue
 
-        # Check if enabled locally in pwd
         is_local_active = name in local_enabled_optionals
-        
-        # Check if enabled globally
         is_global_active = (name in global_enabled_optionals) or (is_default and name not in state.get("disabled_optionals", []))
 
         if is_local_active:
@@ -60,6 +57,14 @@ def sync_active_skills(cwd=None):
         elif is_global_active:
             for adapter in ALL_ADAPTERS:
                 _, msg = adapter.link_skill(name, path, is_local=False)
+                results.append(msg)
+
+    # 3. Custom Subagents (agents/*.md) -> Always Global
+    agents_dir = KIT_DIR / "agents"
+    if agents_dir.exists():
+        for agent_file in agents_dir.glob("*.md"):
+            for adapter in ALL_ADAPTERS:
+                _, msg = adapter.link_agent(agent_file.stem, agent_file, is_local=False)
                 results.append(msg)
 
     return results

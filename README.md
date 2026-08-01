@@ -1,6 +1,6 @@
 # 🧰 my-ai-kit
 
-**Antigravity, Claude Code, OpenAI Codex, Gemini CLI** 등 여러 AI 코딩 에이전트의 스킬(Skills), MCP 설정, 커스텀 명령어, 프로프트를 한 곳에서 중앙 관리하고 단 한 줄의 명령어(`mykit sync`)로 완벽하게 복구/동기화하는 **Multi-Agent Config & Skill Manager**입니다.
+**Antigravity, Claude Code, OpenAI Codex, Gemini CLI** 등 여러 AI 코딩 에이전트의 스킬(Skills), 커스텀 서브 에이전트(Subagents), MCP 설정, 프로프트를 한 곳에서 중앙 관리하고 단 한 줄의 명령어(`mykit sync`)로 완벽하게 복구/동기화하는 **Multi-Agent Config & Skill Manager**입니다.
 
 ---
 
@@ -11,17 +11,32 @@
 
 | 명령어 | 설명 |
 | :--- | :--- |
-| `mykit list` | 활성화된 스택 프로필, MCP 서버, Core(전역) 및 Local(`pwd`) 스킬 상태 조회 |
+| `mykit list` | 활성화된 스택 프로필, MCP 서버, 커스텀 서브 에이전트(`agents/*.md`), Core 및 Local 스킬 조회 |
 | `mykit mcp` | 등록된 MCP 서버 활성화 상태 조회 및 토글 (`mykit mcp enable \| disable <mcp-name>`) |
 | `mykit stack` | 현재 스택 프로필 조회 및 전환 (`mykit stack use personal \| work \| full`) |
 | `mykit install <skill-name>` | **현재 작업 중인 프로젝트 디렉터리(`pwd`)** 내부로 Optional 스킬 설치 (`.claude/skills`, `.gemini/skills`) |
 | `mykit install <skill-name> --global` | Optional 스킬을 전역(Global) 스코프로 설치 |
 | `mykit remove <skill-name>` | 현재 작업 중인 프로젝트 디렉터리(`pwd`)에서 Optional 스킬 제거 |
-| `mykit sync` | `manifest.yaml` 기반 스택 프로필, 활성화된 MCP, Core/Local 스킬 전체 동기화 |
+| `mykit sync` | `manifest.yaml` 기반 스택 프로필, 활성화된 MCP, 커스텀 서브 에이전트, Core/Local 스킬 전체 동기화 |
 | `mykit update [skill-name]` | 외부 GitHub 스킬 최신 커밋으로 업데이트 및 Lockfile 갱신 |
 | `mykit lint [--fix]` | 스킬 YAML 문법, 이름 중복 충돌 및 깨진 심볼릭 링크 자동 점검 (`--fix` 옵션으로 유령 링크 자동 정리) |
 | `mykit dedupe [threshold]` | 스킬 간 키워드/내용 겹침을 분석하여 유사 중복 스킬 탐지 (기본 30%) |
 | `mykit doctor` | 설정 파일 검증, MCP 헬스체크/시크릿 키 진단 및 에이전트별 연결 상태 점검 |
+
+---
+
+## 🤖 커스텀 서브 에이전트 (Custom Subagents) 동기화
+
+`agents/` 폴더에 마크다운(`*.md`) 형태로 서브 에이전트 페르소나 및 전용 지침을 작성해 두면, `mykit sync` 한 줄로 **Claude Code, Antigravity, OpenAI Codex 에이전트 경로로 자동 배포**됩니다.
+
+* `agents/reviewer.md`: 시니어 코드 리뷰어 서브 에이전트
+* `agents/architect.md`: 시스템 아키텍트 서브 에이전트
+
+```text
+my-ai-kit/agents/reviewer.md ──(mykit sync)──> ~/.claude/agents/reviewer.md
+                                          └──> ~/.gemini/antigravity-cli/agents/reviewer.md
+                                          └──> ~/.codex/agents/reviewer.md
+```
 
 ---
 
@@ -59,15 +74,6 @@ mykit stack use full
 
 ---
 
-## 📂 스코프(Scope) 분리 아키텍처
-
-* **Core 스킬 (Global Scope)**:  
-  어디서나 항상 필요한 필수 스킬로, 사용자 홈 디렉터리(`~/.claude/plugins/`, `~/.gemini/antigravity-cli/skills/`)로 전역 배포됩니다.
-* **Optional 스킬 (Local `pwd` Scope)**:  
-  프로젝트별로 선택해서 쓰는 스킬로, **내가 현재 위치한 프로젝트 디렉터리(`pwd`)의 `.claude/skills/`, `.gemini/skills/` 내부로만 심볼릭 링크**가 생성되어 해당 프로젝트를 열었을 때만 AI가 읽습니다.
-
----
-
 ## 📂 디렉터리 구성 및 역할
 
 ```text
@@ -77,6 +83,9 @@ my-ai-kit/
 ├── manifest.lock.json           # 외부 GitHub 스킬 커밋 SHA 고정 장부
 ├── bootstrap.sh                 # 새 컴퓨터 1-Line 초기화 스크립트
 ├── .env.example                 # MCP API 키/시크릿 보관용 템플릿
+├── agents/                      # 커스텀 서브 에이전트 페르소나 정의 (reviewer.md, architect.md 등)
+│   ├── reviewer.md
+│   └── architect.md
 ├── bin/
 │   └── mykit                    # 메인 CLI 실행 파일
 ├── core/                        # 항상 전역으로 설치되는 자체 Core 스크립트/스킬

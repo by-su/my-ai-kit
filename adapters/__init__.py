@@ -6,7 +6,9 @@ class AntigravityAdapter(BaseAdapter):
         super().__init__(
             "Antigravity/Gemini",
             Path.home() / ".gemini" / "antigravity-cli" / "skills",
-            Path(".gemini") / "skills"
+            Path(".gemini") / "skills",
+            Path.home() / ".gemini" / "antigravity-cli" / "agents",
+            Path(".gemini") / "agents"
         )
 
 class ClaudeCodeAdapter(BaseAdapter):
@@ -14,7 +16,9 @@ class ClaudeCodeAdapter(BaseAdapter):
         super().__init__(
             "Claude Code",
             Path.home() / ".claude" / "plugins",
-            Path(".claude") / "skills"
+            Path(".claude") / "skills",
+            Path.home() / ".claude" / "agents",
+            Path(".claude") / "agents"
         )
 
 class CodexAdapter(BaseAdapter):
@@ -22,7 +26,9 @@ class CodexAdapter(BaseAdapter):
         super().__init__(
             "OpenAI Codex",
             Path.home() / ".codex" / "skills",
-            Path(".codex") / "skills"
+            Path(".codex") / "skills",
+            Path.home() / ".codex" / "agents",
+            Path(".codex") / "agents"
         )
 
 ALL_ADAPTERS = [
