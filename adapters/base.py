@@ -13,9 +13,13 @@ class BaseAdapter:
             return Path(cwd) / self.local_rel_path
         return self.global_dir
 
-    def link_skill(self, skill_name, source_path, is_local=False, cwd=None):
+    def ensure_target_dir(self, is_local=False, cwd=None):
         target_dir = self.get_target_dir(is_local, cwd)
         target_dir.mkdir(parents=True, exist_ok=True)
+        return target_dir
+
+    def link_skill(self, skill_name, source_path, is_local=False, cwd=None):
+        target_dir = self.ensure_target_dir(is_local, cwd)
         dest = target_dir / skill_name
 
         if dest.is_symlink() or dest.exists():

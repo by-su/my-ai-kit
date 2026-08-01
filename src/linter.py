@@ -62,7 +62,7 @@ def run_linter(fix=False):
 
         skill_md = skill_path / "SKILL.md"
         if not skill_md.exists():
-            print(f"  \033[1;33m⚠️ {skill_name}\033[0m: SKILL.md not found in {skill_path} (Directory only)")
+            print(f"  \033[1;33m⚠️ {skill_name}\033[0m: SKILL.md not found in {skill_path} (Directory container)")
             warnings_found += 1
             continue
 
@@ -82,23 +82,19 @@ def run_linter(fix=False):
     # 2. Check Adapter Symlinks
     print("\n\033[1;34m[2/3] Checking Adapter Symlink Integrity...\033[0m")
     for adapter in ALL_ADAPTERS:
-        adapter.ensure_target_dir()
-        broken = []
-        for item in adapter.target_dir.glob("*"):
-            if item.is_symlink() and not item.exists():
-                broken.append(item)
+        g_dir = adapter.ensure_target_dir(is_local=False)
+        broken = [item for item in g_dir.glob("*") if item.is_symlink() and not item.exists()]
 
         if broken:
             if fix:
                 for b in broken:
                     b.unlink()
-                print(f"  \033[1;32m✓ {adapter.name}\033[0m: Cleaned up {len(broken)} broken symlinks!")
+                print(f"  \033[1;32m✓ {adapter.name} [Global]\033[0m: Cleaned up {len(broken)} broken symlinks!")
             else:
-                names = [b.name for b in broken]
-                print(f"  \033[1;33m⚠️ {adapter.name}\033[0m: {len(broken)} broken symlink(s) found (run 'mykit lint --fix' to clean)")
+                print(f"  \033[1;33m⚠️ {adapter.name} [Global]\033[0m: {len(broken)} broken symlink(s) found")
                 warnings_found += len(broken)
         else:
-            print(f"  \033[1;32m✓ {adapter.name}\033[0m: All symlinks healthy")
+            print(f"  \033[1;32m✓ {adapter.name} [Global]\033[0m: All symlinks healthy")
 
     # 3. Check Manifest targets
     print("\n\033[1;34m[3/3] Validating Manifest Structure...\033[0m")
