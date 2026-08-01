@@ -49,6 +49,20 @@ global:
         - "-y"
         - "@modelcontextprotocol/server-playwright"
 
+    memory:
+      command: "npx"
+      args:
+        - "-y"
+        - "@modelcontextprotocol/server-memory"
+
+    brave-search:
+      command: "npx"
+      args:
+        - "-y"
+        - "@modelcontextprotocol/server-brave-search"
+      env:
+        BRAVE_API_KEY: "${BRAVE_API_KEY}"
+
 # 항상 자동 설치되는 Core 스크립트 & 스킬
 core:
   - name: "core-git-workflow"
