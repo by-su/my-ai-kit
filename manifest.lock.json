@@ -1,0 +1,10 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-08-01T00:00:00Z",
+  "skills": {
+    "sample-open-skill": {
+      "url": "https://github.com/anthropics/anthropic-quickstarts.git",
+      "commit": "370e18d4a20ff5fd4bc1a6bf11d5105b2383977c"
+    }
+  }
+}

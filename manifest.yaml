@@ -1,0 +1,36 @@
+version: "1.0"
+
+# 에이전트 공통 설정 / MCP 관리
+global:
+  mcp_servers:
+    context7:
+      command: "npx"
+      args: ["-y", "@context7/mcp-server"]
+
+# 항상 자동 설치되는 Core 스크립트 & 스킬
+core:
+  - name: "core-git-workflow"
+    source: "local"
+    path: "core/git-workflow"
+
+# 필요할 때 켜고 끌 수 있는 Optional 스킬
+optional:
+  - name: "db-helper"
+    description: "PostgreSQL & DB 마이그레이션 도우미"
+    source: "local"
+    path: "optional/db-helper"
+    default_enabled: true
+
+  # 오픈소스 외부 스킬 예시 (auto_update: true 설정으로 최신 버전을 자동으로 추종)
+  - name: "sample-open-skill"
+    description: "오픈소스 AI 스킬 팩 (자동 업데이트 지원)"
+    source: "github"
+    url: "https://github.com/anthropics/anthropic-quickstarts.git"
+    auto_update: true
+    default_enabled: false
+
+# 동기화할 에이전트 대상
+targets:
+  claude_code: true
+  antigravity: true
+  codex: true

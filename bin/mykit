@@ -1,0 +1,164 @@
+#!/usr/bin/env python3
+import sys
+import os
+from pathlib import Path
+
+# Add project root to sys.path
+KIT_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(KIT_DIR))
+
+from src.config import load_manifest, load_state, save_state, load_lockfile
+from src.symlink import sync_active_skills, resolve_skill_path
+from src.fetcher import fetch_skill_repo, update_skill_repo
+from adapters import ALL_ADAPTERS
+
+def cmd_list():
+    manifest = load_manifest()
+    state = load_state()
+    enabled_optionals = state.get("enabled_optionals", [])
+    disabled_optionals = state.get("disabled_optionals", [])
+
+    print("\033[1;34m[Core Skills (Always Installed)]\033[0m")
+    for item in manifest.get("core", []):
+        name = item.get("name")
+        src = item.get("source", "local")
+        path = resolve_skill_path(item)
+        auto_up = " [auto-update]" if item.get("auto_update") else ""
+        status = "✓" if path and path.exists() else "✗"
+        print(f"  {status} {name} ({src}){auto_up}")
+
+    print("\n\033[1;35m[Optional Skills]\033[0m")
+    for item in manifest.get("optional", []):
+        name = item.get("name")
+        desc = item.get("description", "")
+        src = item.get("source", "local")
+        is_default = item.get("default_enabled", False)
+        auto_up = " [auto-update]" if item.get("auto_update") else ""
+
+        is_active = (name in enabled_optionals) or (is_default and name not in disabled_optionals)
+        mark = "\033[1;32m[x]\033[0m" if is_active else "[ ]"
+        print(f"  {mark} {name} ({src}){auto_up} - {desc}")
+
+def cmd_enable(skill_name):
+    manifest = load_manifest()
+    all_optionals = [item.get("name") for item in manifest.get("optional", [])]
+    
+    if skill_name not in all_optionals:
+        print(f"\033[1;31mError:\033[0m Optional skill '{skill_name}' not found in manifest.yaml")
+        sys.exit(1)
+
+    state = load_state()
+    enabled = set(state.get("enabled_optionals", []))
+    disabled = set(state.get("disabled_optionals", []))
+    
+    enabled.add(skill_name)
+    disabled.discard(skill_name)
+    
+    state["enabled_optionals"] = list(enabled)
+    state["disabled_optionals"] = list(disabled)
+    save_state(state)
+
+    print(f"✓ Enabled optional skill '{skill_name}'")
+    cmd_sync()
+
+def cmd_disable(skill_name):
+    state = load_state()
+    enabled = set(state.get("enabled_optionals", []))
+    disabled = set(state.get("disabled_optionals", []))
+    
+    enabled.discard(skill_name)
+    disabled.add(skill_name)
+    
+    state["enabled_optionals"] = list(enabled)
+    state["disabled_optionals"] = list(disabled)
+    save_state(state)
+
+    # Unlink from adapters
+    for adapter in ALL_ADAPTERS:
+        adapter.unlink_skill(skill_name)
+
+    print(f"✓ Disabled optional skill '{skill_name}'")
+
+def cmd_sync():
+    manifest = load_manifest()
+    lockfile = load_lockfile()
+    
+    # Fetch github skills first
+    all_skills = manifest.get("core", []) + manifest.get("optional", [])
+    for item in all_skills:
+        if item.get("source") == "github":
+            name = item.get("name")
+            url = item.get("url")
+            auto_update = item.get("auto_update", False)
+            commit_sha = lockfile.get("skills", {}).get(name, {}).get("commit")
+            fetch_skill_repo(name, url, commit_sha, auto_update=auto_update)
+
+    # Sync symlinks
+    results = sync_active_skills()
+    print("\033[1;32m✓ Synchronized skills across all adapters:\033[0m")
+    for r in results:
+        print(f"  - {r}")
+
+def cmd_update(target_skill=None):
+    manifest = load_manifest()
+    all_skills = manifest.get("core", []) + manifest.get("optional", [])
+    github_skills = {item.get("name"): item for item in all_skills if item.get("source") == "github"}
+
+    if target_skill:
+        if target_skill not in github_skills:
+            print(f"\033[1;31mError:\033[0m GitHub skill '{target_skill}' not found in manifest.yaml")
+            sys.exit(1)
+        item = github_skills[target_skill]
+        update_skill_repo(item.get("name"), item.get("url"))
+    else:
+        print("🔄 Updating all GitHub skills to latest remote commits...")
+        for name, item in github_skills.items():
+            update_skill_repo(name, item.get("url"))
+            
+    cmd_sync()
+
+def cmd_doctor():
+    print("\033[1;36m--- Running mykit doctor ---\033[0m")
+    manifest = load_manifest()
+    print(f"✓ Manifest loaded cleanly ({len(manifest.get('core', []))} core, {len(manifest.get('optional', []))} optional)")
+    
+    lockfile = load_lockfile()
+    print(f"✓ Lockfile loaded ({len(lockfile.get('skills', {}))} locked repos)")
+
+    for adapter in ALL_ADAPTERS:
+        adapter.ensure_target_dir()
+        links = list(adapter.target_dir.glob("*"))
+        print(f"✓ Adapter [{adapter.name}] ({adapter.target_dir}): {len(links)} item(s)")
+
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: mykit [list|install|remove|sync|update|doctor|bootstrap]")
+        sys.exit(1)
+
+    cmd = sys.argv[1]
+
+    if cmd == "list":
+        cmd_list()
+    elif cmd in ("install", "enable"):
+        if len(sys.argv) < 3:
+            print("Usage: mykit install <skill-name>")
+            sys.exit(1)
+        cmd_enable(sys.argv[2])
+    elif cmd in ("remove", "disable"):
+        if len(sys.argv) < 3:
+            print("Usage: mykit remove <skill-name>")
+            sys.exit(1)
+        cmd_disable(sys.argv[2])
+    elif cmd in ("sync", "bootstrap"):
+        cmd_sync()
+    elif cmd == "update":
+        target = sys.argv[2] if len(sys.argv) >= 3 else None
+        cmd_update(target)
+    elif cmd == "doctor":
+        cmd_doctor()
+    else:
+        print(f"Unknown command: {cmd}")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()
