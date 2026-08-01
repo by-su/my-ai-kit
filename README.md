@@ -12,15 +12,33 @@
 | 명령어 | 설명 |
 | :--- | :--- |
 | `mykit list` | 활성화된 스택 프로필, MCP 서버, Core(전역) 및 Local(`pwd`) 스킬 상태 조회 |
+| `mykit mcp` | 등록된 MCP 서버 활성화 상태 조회 및 토글 (`mykit mcp enable \| disable <mcp-name>`) |
 | `mykit stack` | 현재 스택 프로필 조회 및 전환 (`mykit stack use personal \| work \| full`) |
 | `mykit install <skill-name>` | **현재 작업 중인 프로젝트 디렉터리(`pwd`)** 내부로 Optional 스킬 설치 (`.claude/skills`, `.gemini/skills`) |
 | `mykit install <skill-name> --global` | Optional 스킬을 전역(Global) 스코프로 설치 |
 | `mykit remove <skill-name>` | 현재 작업 중인 프로젝트 디렉터리(`pwd`)에서 Optional 스킬 제거 |
-| `mykit sync` | `manifest.yaml` 기반 스택 프로필, Core/Local 스킬 및 MCP 전체 동기화 |
+| `mykit sync` | `manifest.yaml` 기반 스택 프로필, 활성화된 MCP, Core/Local 스킬 전체 동기화 |
 | `mykit update [skill-name]` | 외부 GitHub 스킬 최신 커밋으로 업데이트 및 Lockfile 갱신 |
 | `mykit lint [--fix]` | 스킬 YAML 문법, 이름 중복 충돌 및 깨진 심볼릭 링크 자동 점검 (`--fix` 옵션으로 유령 링크 자동 정리) |
 | `mykit dedupe [threshold]` | 스킬 간 키워드/내용 겹침을 분석하여 유사 중복 스킬 탐지 (기본 30%) |
-| `mykit doctor` | 설정 파일 검증 및 에이전트별 심볼릭 링크 연결 상태 진단 |
+| `mykit doctor` | 설정 파일 검증, MCP 헬스체크/시크릿 키 진단 및 에이전트별 연결 상태 점검 |
+
+---
+
+## ⚡ MCP 서버 선택적 관리 (`mykit mcp`)
+
+스킬뿐만 아니라 MCP 서버도 개별적으로 켜고 끌 수 있습니다.
+
+```bash
+# 1. MCP 목록 및 상태 확인
+mykit mcp
+
+# 2. 특정 MCP 켜기
+mykit mcp enable mysql
+
+# 3. 특정 MCP 끄기
+mykit mcp disable mysql
+```
 
 ---
 
@@ -41,6 +59,15 @@ mykit stack use full
 
 ---
 
+## 📂 스코프(Scope) 분리 아키텍처
+
+* **Core 스킬 (Global Scope)**:  
+  어디서나 항상 필요한 필수 스킬로, 사용자 홈 디렉터리(`~/.claude/plugins/`, `~/.gemini/antigravity-cli/skills/`)로 전역 배포됩니다.
+* **Optional 스킬 (Local `pwd` Scope)**:  
+  프로젝트별로 선택해서 쓰는 스킬로, **내가 현재 위치한 프로젝트 디렉터리(`pwd`)의 `.claude/skills/`, `.gemini/skills/` 내부로만 심볼릭 링크**가 생성되어 해당 프로젝트를 열었을 때만 AI가 읽습니다.
+
+---
+
 ## 📂 디렉터리 구성 및 역할
 
 ```text
@@ -49,6 +76,7 @@ my-ai-kit/
 ├── manifest.yaml                # 중앙 관리 마니페스트 (Core/Optional/MCP/Profiles 지정)
 ├── manifest.lock.json           # 외부 GitHub 스킬 커밋 SHA 고정 장부
 ├── bootstrap.sh                 # 새 컴퓨터 1-Line 초기화 스크립트
+├── .env.example                 # MCP API 키/시크릿 보관용 템플릿
 ├── bin/
 │   └── mykit                    # 메인 CLI 실행 파일
 ├── core/                        # 항상 전역으로 설치되는 자체 Core 스크립트/스킬

@@ -2,7 +2,7 @@ import json
 import os
 import re
 from pathlib import Path
-from src.config import load_manifest, KIT_DIR
+from src.config import load_manifest, load_state, KIT_DIR
 
 HOME = Path.home()
 
@@ -45,13 +45,37 @@ def resolve_env_vars(obj):
         return [resolve_env_vars(item) for item in obj]
     return obj
 
-def check_mcp_health():
-    load_env_files()
+def get_mcp_states():
     manifest = load_manifest()
+    state = load_state()
     mcps = manifest.get("global", {}).get("mcp_servers", {})
-    health_report = []
+
+    state_enabled = set(state.get("enabled_mcps", []))
+    state_disabled = set(state.get("disabled_mcps", []))
+
+    active = {}
+    disabled = []
 
     for name, conf in mcps.items():
+        is_def_enabled = conf.get("enabled", True)
+        is_active = (name in state_enabled) or (is_def_enabled and name not in state_disabled)
+        
+        # Strip internal 'enabled' key for clean JSON export
+        clean_conf = {k: v for k, v in conf.items() if k != "enabled"}
+        
+        if is_active:
+            active[name] = clean_conf
+        else:
+            disabled.append(name)
+
+    return active, disabled
+
+def check_mcp_health():
+    load_env_files()
+    active_mcps, _ = get_mcp_states()
+    health_report = []
+
+    for name, conf in active_mcps.items():
         missing_vars = []
         raw_str = json.dumps(conf)
         placeholders = re.findall(r'\$\{([^}]+)\}', raw_str)
@@ -79,13 +103,8 @@ def shutil_which(cmd):
     return shutil.which(cmd)
 
 def sync_mcp_servers():
-    manifest = load_manifest()
-    mcp_servers = manifest.get("global", {}).get("mcp_servers", {})
-    
-    if not mcp_servers:
-        return ["No MCP servers defined in manifest.yaml"]
-
-    resolved_mcp = resolve_env_vars(mcp_servers)
+    active_mcps, disabled_names = get_mcp_states()
+    resolved_active = resolve_env_vars(active_mcps)
     results = []
 
     for target_path in MCP_TARGETS:
@@ -101,12 +120,18 @@ def sync_mcp_servers():
             except Exception:
                 data = {}
 
-        data.setdefault("mcpServers", {})
-        data["mcpServers"].update(resolved_mcp)
+        mcp_sec = data.setdefault("mcpServers", {})
+        
+        # Remove disabled MCPs
+        for d in disabled_names:
+            mcp_sec.pop(d, None)
+
+        # Merge active MCPs
+        mcp_sec.update(resolved_active)
 
         with open(target_path, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
 
-        results.append(f"Merged {len(resolved_mcp)} MCP server(s) -> {target_path}")
+        results.append(f"Merged {len(resolved_active)} active MCP(s) -> {target_path}")
 
     return results

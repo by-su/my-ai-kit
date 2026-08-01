@@ -8,6 +8,7 @@ global:
       args:
         - "-y"
         - "@context7/mcp-server"
+      enabled: true
 
     github:
       command: "npx"
@@ -16,6 +17,7 @@ global:
         - "@modelcontextprotocol/server-github"
       env:
         GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN}"
+      enabled: true
 
     google-docs:
       command: "npx"
@@ -25,12 +27,14 @@ global:
       env:
         GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID}"
         GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET}"
+      enabled: true
 
     google-slides:
       command: "npx"
       args:
         - "-y"
         - "@a-bonus/google-slides-mcp"
+      enabled: true
 
     mysql:
       command: "npx"
@@ -42,18 +46,21 @@ global:
         MYSQL_USER: "${MYSQL_USER}"
         MYSQL_PASSWORD: "${MYSQL_PASSWORD}"
         MYSQL_DATABASE: "${MYSQL_DATABASE}"
+      enabled: false
 
     playwright:
       command: "npx"
       args:
         - "-y"
         - "@modelcontextprotocol/server-playwright"
+      enabled: false
 
     memory:
       command: "npx"
       args:
         - "-y"
         - "@modelcontextprotocol/server-memory"
+      enabled: true
 
     brave-search:
       command: "npx"
@@ -62,6 +69,7 @@ global:
         - "@modelcontextprotocol/server-brave-search"
       env:
         BRAVE_API_KEY: "${BRAVE_API_KEY}"
+      enabled: true
 
 # 스택 프로필 정의 (개인용 / 회사용 / 전체 모드)
 profiles:
