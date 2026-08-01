@@ -8,9 +8,11 @@ def resolve_skill_path(skill_item):
     
     if source_type == "local":
         path_str = skill_item.get("path")
+        path_obj = Path(path_str).expanduser()
+        if path_obj.is_absolute():
+            return path_obj
         return KIT_DIR / path_str
     elif source_type == "github":
-        # Cached git path: ~/.agent-skills/store/fetched/<name>
         return CACHE_DIR / "fetched" / name
     return None
 
@@ -33,7 +35,6 @@ def sync_active_skills():
         name = item.get("name")
         is_default = item.get("default_enabled", False)
         
-        # Enabled if explicitly in state, or default_enabled when state has not overwritten it
         if name in enabled_optionals or (is_default and name not in state.get("disabled_optionals", [])):
             path = resolve_skill_path(item)
             if path and path.exists():

@@ -77,12 +77,11 @@ optional:
     path: "optional/db-helper"
     default_enabled: true
 
-  - name: "sample-open-skill"
-    description: "오픈소스 AI 스킬 팩 (자동 업데이트 지원)"
-    source: "github"
-    url: "https://github.com/anthropics/anthropic-quickstarts.git"
-    auto_update: true
-    default_enabled: false
+  - name: "ecc-suite"
+    description: "Everything Claude Code (ECC v2.0.0) 100+ 종합 스킬 팩"
+    source: "local"
+    path: "~/.claude/plugins/cache/ecc/ecc/2.0.0/skills"
+    default_enabled: true
 
 # 동기화할 에이전트 대상
 targets:
