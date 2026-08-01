@@ -13,7 +13,7 @@ from src.config import (
 )
 from src.symlink import sync_active_skills, resolve_skill_path
 from src.fetcher import fetch_skill_repo, update_skill_repo
-from src.mcp import sync_mcp_servers
+from src.mcp import sync_mcp_servers, check_mcp_health
 from src.linter import run_linter
 from src.dedupe import run_dedupe
 from src.pruner import prune_skills_for_profile
@@ -211,10 +211,16 @@ def cmd_doctor():
     lockfile = load_lockfile()
     print(f"✓ Lockfile loaded ({len(lockfile.get('skills', {}))} locked repos)")
 
+    print("\n\033[1;34m[MCP Server Health & Secret Key Check]\033[0m")
+    reports = check_mcp_health()
+    for name, cmd, status, missing in reports:
+        print(f"  • {name} (cmd: {cmd}) -> {status}")
+
+    print("\n\033[1;34m[AI Agent Target Adapters]\033[0m")
     for adapter in ALL_ADAPTERS:
-        adapter.ensure_target_dir()
-        links = list(adapter.target_dir.glob("*"))
-        print(f"✓ Adapter [{adapter.name}] ({adapter.target_dir}): {len(links)} item(s)")
+        g_dir = adapter.ensure_target_dir(is_local=False)
+        links = list(g_dir.glob("*"))
+        print(f"✓ Adapter [{adapter.name}] ({g_dir}): {len(links)} item(s)")
 
 def main():
     if len(sys.argv) < 2:
