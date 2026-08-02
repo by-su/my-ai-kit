@@ -15,7 +15,7 @@ class ClaudeCodeAdapter(BaseAdapter):
     def __init__(self):
         super().__init__(
             "Claude Code",
-            Path.home() / ".claude" / "plugins",
+            Path.home() / ".claude" / "skills",
             Path(".claude") / "skills",
             Path.home() / ".claude" / "agents",
             Path(".claude") / "agents"

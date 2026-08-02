@@ -80,24 +80,35 @@ def cmd_list():
         print(f"  {mark} {name} ({src}){auto_up} - {desc}")
 
 def cmd_reset():
-    print("\033[1;33m🧹 Performing Deep Reset of all agent configurations, cached stores, and symlinks...\033[0m\n")
+    print("\033[1;33m🧹 Performing Deep Reset of all agent configurations, legacy commands, cached stores, and symlinks...\033[0m\n")
 
-    # 1. Clean adapter directories (Global & Local pwd)
     cwd = Path.cwd()
-    for adapter in ALL_ADAPTERS:
-        # Global
-        g_s_dir = adapter.ensure_target_dir(is_local=False)
-        g_a_dir = adapter.ensure_agent_target_dir(is_local=False)
-        for d in [g_s_dir, g_a_dir]:
-            if d.exists():
-                for item in d.glob("*"):
-                    if item.is_symlink() or item.is_file():
-                        item.unlink()
-                    elif item.is_dir():
-                        shutil.rmtree(item)
-        print(f"  ✓ Deep wiped global adapter: {adapter.name}")
+    home = Path.home()
 
-        # Local pwd
+    # Targets to completely wipe for deep reset
+    legacy_targets = [
+        home / ".claude" / "skills",
+        home / ".claude" / "commands",
+        home / ".claude" / "plugins",
+        home / ".gemini" / "antigravity-cli" / "skills",
+        home / ".gemini" / "skills",
+        home / ".codex" / "skills",
+        home / ".codex" / "prompts",
+    ]
+
+    for d in legacy_targets:
+        if d.exists():
+            for item in d.glob("*"):
+                if item.name in ("cache", "data", "installed_plugins.json"):
+                    continue
+                if item.is_symlink() or item.is_file():
+                    item.unlink()
+                elif item.is_dir():
+                    shutil.rmtree(item)
+            print(f"  ✓ Cleaned directory: {d}")
+
+    # Clean local pwd adapter links
+    for adapter in ALL_ADAPTERS:
         l_s_dir = adapter.get_target_dir(is_local=True, cwd=cwd)
         l_a_dir = adapter.get_agent_target_dir(is_local=True, cwd=cwd)
         for d in [l_s_dir, l_a_dir]:
@@ -105,25 +116,25 @@ def cmd_reset():
                 shutil.rmtree(d)
                 print(f"  ✓ Wiped local pwd adapter: {d}")
 
-    # 2. Reset MCP configs
+    # Reset MCP configs
     for target in MCP_TARGETS:
         if target.exists():
             target.unlink()
             print(f"  ✓ Reset MCP config: {target}")
 
-    # 3. Clean internal cache store (~/.agent-skills/store)
-    store_dir = Path("~/.agent-skills").expanduser()
+    # Clean internal cache store (~/.agent-skills)
+    store_dir = home / ".agent-skills"
     if store_dir.exists():
         shutil.rmtree(store_dir)
         print(f"  ✓ Wiped cached skill store: {store_dir}")
 
-    # 4. Clean local .mykit.json in pwd
+    # Clean local .mykit.json in pwd
     local_json = cwd / ".mykit.json"
     if local_json.exists():
         local_json.unlink()
         print(f"  ✓ Removed local state file: {local_json}")
 
-    print("\n\033[1;32m🎉 Deep Reset complete! Everything is 100% clean. Run 'mykit sync' to re-apply a fresh configuration.\033[0m")
+    print("\n\033[1;32m🎉 Deep Reset complete! All legacy commands and skills wiped 100%. Run 'mykit sync' to re-apply a fresh configuration.\033[0m")
 
 def cmd_mcp(args):
     manifest = load_manifest()
