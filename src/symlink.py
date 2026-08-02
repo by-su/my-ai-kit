@@ -6,50 +6,65 @@ def resolve_skill_path(skill_item):
     source_type = skill_item.get("source", "local")
     name = skill_item.get("name")
     
-    if source_type == "local":
-        path_str = skill_item.get("path")
+    path_str = skill_item.get("path")
+    if path_str:
         path_obj = Path(path_str).expanduser()
-        if path_obj.is_absolute():
+        if path_obj.is_absolute() or str(path_str).startswith("~"):
             return path_obj
         return KIT_DIR / path_str
-    elif source_type == "github":
+
+    if source_type == "github":
         return CACHE_DIR / "fetched" / name
     return None
 
 def find_sub_skills(base_path):
     """
-    Finds all individual skill directories or skill files inside a skill package/repo.
+    Finds complete skill root directories.
+    When a skill directory is symlinked, its internal assets/, references/, scripts/, etc.
+    remain completely intact inside the skill folder.
     """
     if not base_path or not base_path.exists():
         return {}
 
     skills = {}
 
-    # Case 1: Root itself is a valid skill
+    # Case 1: Root itself is a complete skill with SKILL.md
     if (base_path / "SKILL.md").exists():
         skills[base_path.name] = base_path
         return skills
 
-    # Case 2: Standard subdirectories (skills/, agent-skills/)
-    search_dirs = []
-    if (base_path / "skills").exists():
-        search_dirs.append(base_path / "skills")
-    if (base_path / "agent-skills").exists():
-        search_dirs.append(base_path / "agent-skills")
-    
-    if not search_dirs:
-        search_dirs.append(base_path)
-
-    for s_dir in search_dirs:
-        for item in s_dir.rglob("*"):
+    # Case 2: ecc-pruned-skills (each subfolder is a complete skill folder)
+    if base_path.name == "ecc-pruned-skills":
+        for item in base_path.iterdir():
             if item.is_dir():
-                if (item / "SKILL.md").exists():
-                    skills[item.name] = item
-                elif not any(p.name in ("assets", "references", "scripts", ".git") for p in item.parents):
-                    # Check if directory contains markdown skill files
-                    md_files = [f for f in item.glob("*.md") if f.name not in ("README.md", "LICENSE.md", "CHANGELOG.md")]
-                    if md_files:
-                        skills[item.name] = item
+                skills[item.name] = item
+        return skills
+
+    # Case 3: Structure like prompt-architect (skills/<skill-name>)
+    if (base_path / "skills").exists():
+        skills_dir = base_path / "skills"
+        for item in skills_dir.iterdir():
+            if item.is_dir():
+                skills[item.name] = item
+        if skills:
+            return skills
+
+    # Case 4: Structure like mengto-skills (agent-skills/<category>/<skill-name>)
+    if (base_path / "agent-skills").exists():
+        ag_dir = base_path / "agent-skills"
+        for category in ag_dir.iterdir():
+            if category.is_dir():
+                for skill_folder in category.iterdir():
+                    if skill_folder.is_dir():
+                        skills[skill_folder.name] = skill_folder
+        if skills:
+            return skills
+
+    # Case 5: Direct skill root folders in base_path
+    for item in base_path.iterdir():
+        if item.is_dir() and not item.name.startswith("."):
+            if (item / "SKILL.md").exists() or any(f.suffix == ".md" for f in item.glob("*.md")):
+                skills[item.name] = item
 
     if not skills and base_path.exists():
         skills[base_path.name] = base_path

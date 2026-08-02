@@ -1,10 +1,10 @@
 {
   "version": "1.0",
-  "generated_at": "2026-08-01T00:00:00Z",
+  "generated_at": "2026-08-02T18:26:34Z",
   "skills": {
-    "sample-open-skill": {
-      "url": "https://github.com/anthropics/anthropic-quickstarts.git",
-      "commit": "370e18d4a20ff5fd4bc1a6bf11d5105b2383977c"
+    "ecc-suite": {
+      "url": "https://github.com/affaan-m/everything-claude-code.git",
+      "commit": "e4e4163101f162881e628f300a9ca4e6a940bcea"
     },
     "prompt-architect": {
       "url": "https://github.com/ckelsoe/prompt-architect.git",

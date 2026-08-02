@@ -12,22 +12,52 @@ from src.config import (
     load_manifest, load_state, save_state, load_lockfile,
     load_local_state, save_local_state, get_active_profile, set_active_profile
 )
-from src.symlink import sync_active_skills, resolve_skill_path
+from src.symlink import sync_active_skills, resolve_skill_path, find_sub_skills
 from src.fetcher import fetch_skill_repo, update_skill_repo
 from src.mcp import sync_mcp_servers, check_mcp_health, get_mcp_states, MCP_TARGETS
 from src.permissions import sync_auto_approve_permissions
 from src.linter import run_linter
 from src.dedupe import run_dedupe
-from src.pruner import prune_skills_for_profile
+from src.pruner import prune_skills_for_profile, prune_mengto_skills_for_profile
 from src.completion import generate_completion, install_completion
 from src.dashboard import setup_env_interactive, show_stats
 from adapters import ALL_ADAPTERS
 
-def cmd_list():
+def cmd_list(args=None):
     manifest = load_manifest()
     state = load_state()
     local_state = load_local_state()
     active_profile = get_active_profile()
+
+    target_query = args[0].lower() if args else None
+
+    if target_query:
+        if "mengto" in target_query:
+            mengto_dir = Path("~/.agent-skills/store/mengto-pruned-skills").expanduser()
+            if not mengto_dir.exists():
+                mengto_dir = Path("~/.agent-skills/store/fetched/mengto-skills/agent-skills").expanduser()
+            print(f"\033[1;36m🎨 [MengTo Skills Breakdown]\033[0m ({mengto_dir})\n")
+            if mengto_dir.exists():
+                items = sorted([x.name for x in mengto_dir.iterdir() if x.is_dir()])
+                print(f"Active Profile '\033[1;32m{active_profile}\033[0m' loaded {len(items)} skills:")
+                for s in items:
+                    print(f"  • {s}")
+                print(f"\n\033[1;32mTotal: {len(items)} pruned MengTo skills.\033[0m")
+            else:
+                print("⚠️ mengto-skills repository not downloaded yet. Run 'mykit sync' first.")
+            return
+
+        if "ecc" in target_query:
+            ecc_dir = Path("~/.agent-skills/store/ecc-pruned-skills").expanduser()
+            print(f"\033[1;36m⚡ [Everything Claude Code (ECC) Pruned Suite]\033[0m ({ecc_dir})\n")
+            if ecc_dir.exists():
+                items = sorted([x.name for x in ecc_dir.iterdir() if x.is_dir()])
+                print(f"Active Profile '\033[1;32m{active_profile}\033[0m' loaded {len(items)} skills:")
+                for it in items:
+                    print(f"  • {it}")
+            else:
+                print("⚠️ ecc-suite not pruned yet. Run 'mykit sync' first.")
+            return
 
     global_enabled = set(state.get("enabled_optionals", []))
     local_enabled = set(local_state.get("enabled_optionals", []))
@@ -77,7 +107,13 @@ def cmd_list():
         else:
             mark = "[Off]"
 
-        print(f"  {mark} {name} ({src}){auto_up} - {desc}")
+        path = resolve_skill_path(item)
+        sub_count = len(find_sub_skills(path)) if path and path.exists() else 0
+        count_label = f" ({sub_count} sub-skills)" if sub_count > 1 else ""
+
+        print(f"  {mark} {name}{count_label} ({src}){auto_up} - {desc}")
+    
+    print("\n💡 To view detailed breakdown of a skill pack, run: \033[1mmykit list mengto\033[0m or \033[1mmykit list ecc\033[0m")
 
 def cmd_reset():
     print("\033[1;33m🧹 Performing Deep Reset of all agent configurations, legacy commands, cached stores, and symlinks...\033[0m\n")
@@ -276,7 +312,7 @@ def cmd_sync():
     lockfile = load_lockfile()
     active_profile = get_active_profile()
 
-    # 1. Fetch github skills first (including ecc-suite)
+    # 1. Fetch github skills first (including ecc-suite and mengto-skills)
     all_skills = manifest.get("core", []) + manifest.get("optional", [])
     for item in all_skills:
         if item.get("source") == "github":
@@ -290,19 +326,25 @@ def cmd_sync():
     ecc_fetched = Path("~/.agent-skills/store/fetched/ecc-suite").expanduser()
     ecc_cache = Path("~/.claude/plugins/cache/ecc/ecc/2.0.0").expanduser()
     ecc_base = ecc_fetched if ecc_fetched.exists() else ecc_cache
-
     ecc_target = Path("~/.agent-skills/store/ecc-pruned-skills").expanduser()
     if ecc_base.exists():
         inc, exc = prune_skills_for_profile(ecc_base, ecc_target, active_profile)
         print(f"⚡ Stack Profile '\033[1;36m{active_profile}\033[0m': Pruned {len(inc)} ECC skills ({len(exc)} excluded) into {ecc_target}")
 
-    # 3. Sync MCPs
+    # 3. Prune MengTo skills according to active profile
+    mengto_fetched = Path("~/.agent-skills/store/fetched/mengto-skills").expanduser()
+    mengto_target = Path("~/.agent-skills/store/mengto-pruned-skills").expanduser()
+    if mengto_fetched.exists():
+        inc, exc = prune_mengto_skills_for_profile(mengto_fetched, mengto_target, active_profile)
+        print(f"🎨 Stack Profile '\033[1;36m{active_profile}\033[0m': Pruned {len(inc)} MengTo skills ({len(exc)} excluded) into {mengto_target}")
+
+    # 4. Sync MCPs
     mcp_results = sync_mcp_servers()
 
-    # 4. Sync Permissions (Auto-approve commands)
+    # 5. Sync Permissions (Auto-approve commands)
     perm_results = sync_auto_approve_permissions()
 
-    # 5. Sync symlinks (both global & pwd local skills + custom agents)
+    # 6. Sync symlinks (both global & pwd local skills + custom agents)
     results = sync_active_skills(cwd=Path.cwd())
     print("\033[1;32m✓ Synchronized skills, custom agents, permissions, and MCPs across all adapters:\033[0m")
     for r in mcp_results:
@@ -366,7 +408,7 @@ def main():
     cmd = sys.argv[1]
 
     if cmd == "list":
-        cmd_list()
+        cmd_list(sys.argv[2:])
     elif cmd == "reset":
         cmd_reset()
     elif cmd == "stats":
