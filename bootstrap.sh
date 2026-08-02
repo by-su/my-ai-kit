@@ -29,6 +29,19 @@ if [ -f "$HOME/.bashrc" ]; then
     fi
 fi
 
+# Deploy global AGENTS.md (Karpathy guidelines) across targets
+echo "📋 Deploying global AGENTS.md (Karpathy guidelines)..."
+mkdir -p ~/.claude
+mkdir -p ~/.gemini/antigravity-cli
+mkdir -p ~/.codex
+
+cp "$SCRIPT_DIR/AGENTS.md" ~/.claude/CLAUDE.md
+cp "$SCRIPT_DIR/AGENTS.md" ~/.gemini/antigravity-cli/AGENTS.md
+cp "$SCRIPT_DIR/AGENTS.md" ~/.codex/instructions.md
+cp "$SCRIPT_DIR/AGENTS.md" ~/.codex/AGENTS.md
+
+echo "✓ Global Karpathy guidelines deployed to ~/.claude, ~/.gemini, ~/.codex"
+
 # Run initial sync
 "$MYKIT_BIN" sync
 
