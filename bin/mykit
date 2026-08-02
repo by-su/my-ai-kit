@@ -85,7 +85,6 @@ def cmd_reset():
     cwd = Path.cwd()
     home = Path.home()
 
-    # Targets to completely wipe for deep reset
     legacy_targets = [
         home / ".claude" / "skills",
         home / ".claude" / "commands",
@@ -107,7 +106,6 @@ def cmd_reset():
                     shutil.rmtree(item)
             print(f"  ✓ Cleaned directory: {d}")
 
-    # Clean local pwd adapter links
     for adapter in ALL_ADAPTERS:
         l_s_dir = adapter.get_target_dir(is_local=True, cwd=cwd)
         l_a_dir = adapter.get_agent_target_dir(is_local=True, cwd=cwd)
@@ -116,19 +114,16 @@ def cmd_reset():
                 shutil.rmtree(d)
                 print(f"  ✓ Wiped local pwd adapter: {d}")
 
-    # Reset MCP configs
     for target in MCP_TARGETS:
         if target.exists():
             target.unlink()
             print(f"  ✓ Reset MCP config: {target}")
 
-    # Clean internal cache store (~/.agent-skills)
     store_dir = home / ".agent-skills"
     if store_dir.exists():
         shutil.rmtree(store_dir)
         print(f"  ✓ Wiped cached skill store: {store_dir}")
 
-    # Clean local .mykit.json in pwd
     local_json = cwd / ".mykit.json"
     if local_json.exists():
         local_json.unlink()
@@ -238,6 +233,12 @@ def cmd_enable(skill_name, is_global=False):
         print(f"✓ Enabled optional skill '{skill_name}' [Local Scope: {cwd}]")
 
     cmd_sync()
+
+    # Trigger post-install automatic dedupe hook if enabled
+    auto_dedupe = manifest.get("auto_dedupe_on_install", True)
+    if auto_dedupe:
+        print("\n\033[1;36m🔄 Post-Install Hook: Running automatic dedupe check for newly installed skill...\033[0m\n")
+        run_dedupe(threshold=30.0)
 
 def cmd_disable(skill_name, is_global=False):
     cwd = Path.cwd()

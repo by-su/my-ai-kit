@@ -12,13 +12,13 @@
 | 명령어 | 설명 |
 | :--- | :--- |
 | `mykit list` | 활성화된 스택 프로필, MCP 서버, 커스텀 서브 에이전트(`agents/*.md`), Core 및 Local 스킬 조회 |
+| `mykit install <skill-name>` | **현재 작업 중인 프로젝트 디렉터리(`pwd`)** 내부로 Optional 스킬 설치 및 **자동 중복 스캔 훅(Auto-Dedupe Hook) 연동** |
+| `mykit install <skill-name> --global` | Optional 스킬을 전역(Global) 스코프로 설치 및 **자동 중복 스캔 훅 연동** |
+| `mykit remove <skill-name>` | 현재 작업 중인 프로젝트 디렉터리(`pwd`)에서 Optional 스킬 제거 |
 | `mykit stats` | 시스템 전체 통계 대시보드 (스킬 감축률, 토큰 절약량, 에이전트 연결 현황) |
 | `mykit env setup` | MCP API 키 및 시크릿 인터랙티브 자동 대화형 등록 마법사 |
 | `mykit mcp` | 등록된 MCP 서버 활성화 상태 조회 및 토글 (`mykit mcp enable \| disable <mcp-name>`) |
 | `mykit stack` | 현재 스택 프로필 조회 및 전환 (`mykit stack use personal \| work \| full`) |
-| `mykit install <skill-name>` | **현재 작업 중인 프로젝트 디렉터리(`pwd`)** 내부로 Optional 스킬 설치 (`.claude/skills`, `.gemini/skills`) |
-| `mykit install <skill-name> --global` | Optional 스킬을 전역(Global) 스코프로 설치 |
-| `mykit remove <skill-name>` | 현재 작업 중인 프로젝트 디렉터리(`pwd`)에서 Optional 스킬 제거 |
 | `mykit sync` | `manifest.yaml` 기반 스택 프로필, 안전 명령어 자동 승인, MCP, 서브 에이전트, Core/Local 스킬 전체 동기화 |
 | `mykit completion install` | Zsh / Bash 터미널 자동 완성(Tab Completion) 1초 등록 |
 | `mykit update [skill-name]` | 외부 GitHub 스킬 최신 커밋으로 업데이트 및 Lockfile 갱신 |
@@ -28,15 +28,20 @@
 
 ---
 
+## 🔄 스킬 설치 시 자동 중복 스캔 훅 (Post-Install Auto-Dedupe Hook)
+
+새로운 스킬을 등록(`mykit install <skill-name>`)하면 동기화 완료 직후 **자동으로 `mykit dedupe` 훅이 작동**하여, 새로 추가된 스킬이 기존 스킬과 30% 이상 텍스트/지침이 겹치는지 실시간으로 스캔하고 알려줍니다.
+
+[`manifest.yaml`](file:///Users/bysu/workspace/my-ai-kit/manifest.yaml) 설정:
+```yaml
+auto_dedupe_on_install: true  # <--- 스킬 설치 시 자동 중복 스캔 훅
+```
+
+---
+
 ## 🛡️ 안전 명령어 자동 승인 (Auto-Approve Safe Commands)
 
 매번 터미널 명령어를 실행할 때마다 사람이 승인 버튼을 누르지 않아도 되도록, **안전한 읽기/조회/빌드/테스트 명령어**를 모든 에이전트(Claude Code, Antigravity, Gemini, Codex)에 자동 승인으로 일괄 등록합니다.
-
-[`manifest.yaml`](file:///Users/bysu/workspace/my-ai-kit/manifest.yaml)에 사전 등록된 21개 안전 명령어:
-* **Git 관련**: `git`
-* **파일 조회**: `ls`, `cat`, `head`, `tail`, `grep`, `rg`, `find`, `pwd`, `echo`
-* **스크립트 및 런타임**: `python3`, `python`, `node`, `npx`, `mykit`
-* **빌드 및 테스트**: `npm test`, `npm run build`, `npm run dev`, `yarn test`, `pnpm test`, `pytest`
 
 ---
 
@@ -63,14 +68,6 @@ mykit env setup
 ## ⌨️ 터미널 자동 완성 (Tab Completion)
 
 터미널에서 `mykit <Tab>` 키를 누르면 모든 명령어와 스킬 이름이 **자동 완성**됩니다.
-
-```bash
-# 1. 자동 완성 1초 등록
-mykit completion install
-
-# 2. 터미널 갱신
-source ~/.zshrc
-```
 
 ---
 
@@ -101,40 +98,6 @@ mykit mcp disable mysql
 
 회사 PC와 개인 PC의 개발 스택이 다르거나 270+ 스킬 전체를 전부 로드해야 할 때 프로필 한 줄로 유연하게 전환할 수 있습니다.
 
-```bash
-# 1. 개인 PC 스택 모드 (TS/JS, React, Python, Java, Kotlin, SpringBoot, Prisma 등)
-mykit stack use personal
-
-# 2. 회사 PC 스택 모드 (회사 전용 기술 스택)
-mykit stack use work
-
-# 3. 전체 모드 (필터링 없이 270+ 스킬 전부 로드)
-mykit stack use full
-```
-
----
-
-## 📂 디렉터리 구성 및 역할
-
-```text
-my-ai-kit/
-├── README.md                    # 사용 가이드 및 명령어 치트시트
-├── manifest.yaml                # 중앙 관리 마니페스트 (Core/Optional/MCP/Profiles/AutoApprove 지정)
-├── manifest.lock.json           # 외부 GitHub 스킬 커밋 SHA 고정 장부
-├── bootstrap.sh                 # 새 컴퓨터 1-Line 초기화 스크립트
-├── .env.example                 # MCP API 키/시크릿 보관용 템플릿
-├── agents/                      # 커스텀 서브 에이전트 페르소나 정의 (reviewer.md, architect.md 등)
-├── completions/                 # Zsh / Bash 터미널 자동 완성 스크립트
-├── bin/
-│   └── mykit                    # 메인 CLI 실행 파일
-├── core/                        # 항상 전역으로 설치되는 자체 Core 스크립트/스킬
-│   └── git-workflow/SKILL.md
-├── optional/                    # 필요 시 프로젝트(`pwd`)별로 설치하는 Optional 스크립트/스킬
-│   └── db-helper/SKILL.md
-├── adapters/                    # 에이전트별(Antigravity, Claude, Codex) 전역/로컬 자동 링크 어댑터
-└── src/                         # CLI 엔진 (Config, Symlink, Fetcher, MCP, Linter, Dedupe, Pruner, Completion, Dashboard, Permissions)
-```
-
 ---
 
 ## 🚀 워크플로우 가이드
@@ -147,7 +110,7 @@ cd ~/workspace/my-react-project
 # 2. 이 프로젝트에서만 사용할 Optional 스킬 설치
 mykit install prompt-architect
 
-# -> 해당 프로젝트 폴더 내부(./.claude/skills/prompt-architect)로 가상 링크 생성!
+# -> 설치 완료 직후 자동 중복 스캔 훅 실행!
 ```
 
 ---
@@ -156,10 +119,6 @@ mykit install prompt-architect
 새 컴퓨터로 옮겼을 때 아래 스크립트 한 줄로 기존 세팅을 100% 동일하게 재현합니다:
 
 ```bash
-# PATH 등록 (~/.zshrc 또는 ~/.bashrc)
-export PATH="$HOME/workspace/my-ai-kit/bin:$PATH"
-
-# 복구 실행
 ./bootstrap.sh
 ```
 
@@ -167,4 +126,3 @@ export PATH="$HOME/workspace/my-ai-kit/bin:$PATH"
 
 ## 🔒 보안 및 버전 고정 (`manifest.lock.json`)
 * 외부 GitHub 스킬은 `auto_update: false`로 설정하면 `manifest.lock.json`에 기록된 **Git Commit SHA** 버전만 고정되어 설치되므로, 외부 수정으로 인한 오염을 방지할 수 있습니다.
-* 스킬 최신화가 필요할 땐 언제든 `mykit update <skill-name>`을 실행하세요.
