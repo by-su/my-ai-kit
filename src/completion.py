@@ -25,6 +25,7 @@ _mykit() {
                 'install:Install optional skill to pwd (or --global)'
                 'remove:Remove optional skill from pwd (or --global)'
                 'sync:Synchronize all skills, MCPs, and agents across adapters'
+                'reset:Reset all agent configs and symlinks cleanly'
                 'update:Update remote GitHub skills to latest commits'
                 'lint:Check skill frontmatter and symlink integrity (--fix)'
                 'dedupe:Detect semantic overlaps across skills'
@@ -84,8 +85,6 @@ mykit_get_mcps() {
 mykit_get_optionals() {
     echo "db-helper ecc-suite mengto-skills prompt-architect"
 }
-
-_mykit "$@"
 """
 
 BASH_COMPLETION_SCRIPT = """# bash completion for mykit
@@ -96,7 +95,7 @@ _mykit_completions() {
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-    opts="list stats env stack mcp install remove sync update lint dedupe doctor completion"
+    opts="list stats env stack mcp install remove sync reset update lint dedupe doctor completion"
 
     if [ $COMP_CWORD -eq 1 ]; then
         COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
@@ -141,7 +140,6 @@ def generate_completion(shell_type):
 def install_completion():
     home = Path.home()
     zshrc = home / ".zshrc"
-    bashrc = home / ".bashrc"
 
     comp_dir = KIT_DIR / "completions"
     comp_dir.mkdir(parents=True, exist_ok=True)
@@ -154,15 +152,16 @@ def install_completion():
     with open(bash_file, 'w', encoding='utf-8') as f:
         f.write(BASH_COMPLETION_SCRIPT.strip())
 
-    line_to_add = f'source "{zsh_file.resolve()}"'
-
     if zshrc.exists():
-        content = zshrc.read_text(encoding='utf-8', errors='ignore')
-        if str(zsh_file) not in content:
-            with open(zshrc, 'a', encoding='utf-8') as f:
-                f.write(f"\n# mykit tab completion\ncompdef _mykit mykit\n{line_to_add}\n")
-            print(f"✓ Appended zsh completion loader to {zshrc}")
-        else:
-            print(f"✓ zsh completion already installed in {zshrc}")
+        lines = zshrc.read_text(encoding='utf-8', errors='ignore').splitlines()
+        new_lines = [l for l in lines if "mykit" not in l and "compdef _mykit" not in l and "_mykit" not in l]
+        
+        # Clean zshrc and add proper fpath completion loading
+        zsh_entry = f'\n# mykit CLI PATH & Completion\nexport PATH="{KIT_DIR}/bin:$PATH"\nfpath=("{comp_dir}" $fpath)\nautoload -U compinit && compinit -u\ncompdef _mykit mykit\n'
+        
+        with open(zshrc, 'w', encoding='utf-8') as f:
+            f.write("\n".join(new_lines) + zsh_entry)
+            
+        print(f"✓ Fixed and updated zsh completion in {zshrc}")
 
-    print("\033[1;32m🎉 Tab completion installed! Run 'source ~/.zshrc' to activate tab completion.\033[0m")
+    print("\033[1;32m🎉 Zsh Tab completion cleanly installed!\033[0m")
