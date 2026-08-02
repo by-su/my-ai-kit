@@ -276,14 +276,7 @@ def cmd_sync():
     lockfile = load_lockfile()
     active_profile = get_active_profile()
 
-    # 1. Prune ECC suite according to active profile
-    ecc_base = Path("~/.claude/plugins/cache/ecc/ecc/2.0.0").expanduser()
-    ecc_target = Path("~/.agent-skills/store/ecc-pruned-skills").expanduser()
-    if ecc_base.exists():
-        inc, exc = prune_skills_for_profile(ecc_base, ecc_target, active_profile)
-        print(f"⚡ Stack Profile '\033[1;36m{active_profile}\033[0m': Loaded {len(inc)} skills ({len(exc)} excluded)")
-
-    # 2. Fetch github skills
+    # 1. Fetch github skills first (including ecc-suite)
     all_skills = manifest.get("core", []) + manifest.get("optional", [])
     for item in all_skills:
         if item.get("source") == "github":
@@ -292,6 +285,16 @@ def cmd_sync():
             auto_update = item.get("auto_update", False)
             commit_sha = lockfile.get("skills", {}).get(name, {}).get("commit")
             fetch_skill_repo(name, url, commit_sha, auto_update=auto_update)
+
+    # 2. Prune ECC suite according to active profile
+    ecc_fetched = Path("~/.agent-skills/store/fetched/ecc-suite").expanduser()
+    ecc_cache = Path("~/.claude/plugins/cache/ecc/ecc/2.0.0").expanduser()
+    ecc_base = ecc_fetched if ecc_fetched.exists() else ecc_cache
+
+    ecc_target = Path("~/.agent-skills/store/ecc-pruned-skills").expanduser()
+    if ecc_base.exists():
+        inc, exc = prune_skills_for_profile(ecc_base, ecc_target, active_profile)
+        print(f"⚡ Stack Profile '\033[1;36m{active_profile}\033[0m': Pruned {len(inc)} ECC skills ({len(exc)} excluded) into {ecc_target}")
 
     # 3. Sync MCPs
     mcp_results = sync_mcp_servers()
