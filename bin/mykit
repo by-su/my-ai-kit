@@ -87,11 +87,15 @@ def cmd_reset():
 
     legacy_targets = [
         home / ".claude" / "skills",
+        home / ".claude" / "agents",
         home / ".claude" / "commands",
         home / ".claude" / "plugins",
         home / ".gemini" / "antigravity-cli" / "skills",
+        home / ".gemini" / "antigravity-cli" / "agents",
         home / ".gemini" / "skills",
+        home / ".gemini" / "agents",
         home / ".codex" / "skills",
+        home / ".codex" / "agents",
         home / ".codex" / "prompts",
     ]
 
