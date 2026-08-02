@@ -2,14 +2,40 @@ import shutil
 from pathlib import Path
 from src.config import load_manifest, KIT_DIR
 
-# Universal core developer utilities (always included across all profiles)
+# Universal core developer utilities (keyword-based, used for SKILL pruning)
 UNIVERSAL_UTILITIES = {
-    'git', 'review', 'reviewer', 'testing', 'security',
+    'git', 'testing', 'security',
     'refactor', 'cleaner', 'verification', 'performance',
     'architecture', 'architect', 'quality', 'debug', 'skill-create',
     'instinct', 'status', 'loop', 'tdd', 'mcp', 'prompt', 'clean', 'ui', 'design',
-    'write', 'writing', 'article', 'copywriting', 'post', 'docs', 'doc', 'readme', 'x', 'codex'
+    'write', 'writing', 'article', 'copywriting', 'post', 'docs', 'doc', 'readme', 'x', 'codex',
 }
+
+
+# Universal agents: always deployed regardless of active tech-stack profile.
+# These provide value across ANY project (architecture, review, security, etc.)
+UNIVERSAL_AGENTS = {
+    # Orchestration & planning
+    'architect', 'code-architect', 'chief-of-staff', 'planner',
+    # Code quality & review
+    'code-reviewer', 'code-explorer', 'code-simplifier', 'refactor-cleaner',
+    'comment-analyzer', 'silent-failure-hunter',
+    # Testing & reliability
+    'e2e-runner', 'tdd-guide', 'pr-test-analyzer', 'build-error-resolver',
+    # Security & performance
+    'security-reviewer', 'performance-optimizer',
+    # Docs & specs
+    'doc-updater', 'docs-lookup', 'spec-miner',
+    # AI agents
+    'agent-evaluator', 'loop-operator',
+    # Infrastructure & DB
+    'database-reviewer', 'network-architect', 'network-config-reviewer', 'homelab-architect',
+    # Accessibility & design
+    'a11y-architect', 'type-design-analyzer', 'seo-specialist',
+    # Conversation & analysis
+    'conversation-analyzer',
+}
+
 
 def get_profile_keywords(profile_name):
     manifest = load_manifest()
@@ -38,6 +64,21 @@ def is_skill_relevant(skill_name, profile_keywords):
         if util in lower_name:
             return True
             
+    return False
+
+def is_agent_profile_relevant(agent_name, profile_keywords):
+    """
+    Strict profile match for agents — does NOT use UNIVERSAL_UTILITIES
+    to avoid false positives (e.g. 'ui' matching 'build', 'java' matching 'javascript').
+    Only matches if the profile keyword is a standalone word segment in the agent name.
+    """
+    if "*" in profile_keywords:
+        return True
+
+    parts = set(agent_name.lower().replace('-', ' ').replace('_', ' ').split())
+    for kw in profile_keywords:
+        if kw.lower() in parts:
+            return True
     return False
 
 def prune_skills_for_profile(ecc_base_dir, target_dir, profile_name="personal"):
@@ -104,5 +145,36 @@ def prune_mengto_skills_for_profile(mengto_base_dir, target_dir, profile_name="p
                             included.append(skill_folder.name)
                         else:
                             excluded.append(skill_folder.name)
+
+    return included, excluded
+
+def prune_pack_agents_for_profile(agents_src_dir, target_dir, profile_name="personal"):
+    """
+    Filters agent .md files from a skill pack's agents/ directory.
+    Inclusion logic (OR):
+      1. Agent stem is in UNIVERSAL_AGENTS -> always included regardless of profile
+      2. Agent name matches active profile keywords via is_skill_relevant()
+    """
+    src = Path(agents_src_dir).expanduser()
+    target = Path(target_dir).expanduser()
+
+    if not src.exists():
+        return [], []
+
+    if target.exists():
+        shutil.rmtree(target)
+    target.mkdir(parents=True, exist_ok=True)
+
+    keywords = get_profile_keywords(profile_name)
+    included = []
+    excluded = []
+
+    for agent_file in sorted(src.glob("*.md")):
+        stem = agent_file.stem
+        if stem in UNIVERSAL_AGENTS or is_agent_profile_relevant(stem, keywords):
+            shutil.copy2(agent_file, target / agent_file.name)
+            included.append(stem)
+        else:
+            excluded.append(stem)
 
     return included, excluded
