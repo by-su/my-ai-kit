@@ -11,3 +11,9 @@ __pycache__/
 .claude/skills/
 .gemini/skills/
 .codex/skills/
+
+# Secrets & Environment variables
+.env
+.env.*
+!.env.example
+
