@@ -2,6 +2,8 @@
 import sys
 import os
 import shutil
+import unicodedata
+import re
 from pathlib import Path
 
 # Add project root to sys.path
@@ -18,10 +20,23 @@ from src.mcp import sync_mcp_servers, check_mcp_health, get_mcp_states, MCP_TARG
 from src.permissions import sync_auto_approve_permissions
 from src.linter import run_linter
 from src.dedupe import run_dedupe
-from src.pruner import prune_skills_for_profile, prune_mengto_skills_for_profile
+from src.pruner import prune_skills_for_profile, prune_mengto_skills_for_profile, prune_pack_agents_for_profile
 from src.completion import generate_completion, install_completion
 from src.dashboard import setup_env_interactive, show_stats
 from adapters import ALL_ADAPTERS
+
+def str_display_width(s):
+    clean = re.sub(r'\033\[[0-9;]*m', '', str(s))
+    w = 0
+    for ch in clean:
+        w += 2 if unicodedata.east_asian_width(ch) in ('F', 'W') else 1
+    return w
+
+def pad_cell(s, width):
+    w = str_display_width(s)
+    if w >= width:
+        return s
+    return s + ' ' * (width - w)
 
 def cmd_list(args=None):
     manifest = load_manifest()
@@ -39,9 +54,12 @@ def cmd_list(args=None):
             print(f"\033[1;36m🎨 [MengTo Skills Breakdown]\033[0m ({mengto_dir})\n")
             if mengto_dir.exists():
                 items = sorted([x.name for x in mengto_dir.iterdir() if x.is_dir()])
-                print(f"Active Profile '\033[1;32m{active_profile}\033[0m' loaded {len(items)} skills:")
-                for s in items:
-                    print(f"  • {s}")
+                print(f"Active Profile '\033[1;32m{active_profile}\033[0m' loaded {len(items)} skills:\n")
+                col_w = 32
+                formatted_items = [f"• {s}" for s in items]
+                for i in range(0, len(formatted_items), 3):
+                    row = formatted_items[i:i+3]
+                    print("  " + "  ".join(pad_cell(item, col_w) for item in row))
                 print(f"\n\033[1;32mTotal: {len(items)} pruned MengTo skills.\033[0m")
             else:
                 print("⚠️ mengto-skills repository not downloaded yet. Run 'mykit sync' first.")
@@ -52,9 +70,13 @@ def cmd_list(args=None):
             print(f"\033[1;36m⚡ [Everything Claude Code (ECC) Pruned Suite]\033[0m ({ecc_dir})\n")
             if ecc_dir.exists():
                 items = sorted([x.name for x in ecc_dir.iterdir() if x.is_dir()])
-                print(f"Active Profile '\033[1;32m{active_profile}\033[0m' loaded {len(items)} skills:")
-                for it in items:
-                    print(f"  • {it}")
+                print(f"Active Profile '\033[1;32m{active_profile}\033[0m' loaded {len(items)} skills:\n")
+                col_w = 32
+                formatted_items = [f"• {it}" for it in items]
+                for i in range(0, len(formatted_items), 3):
+                    row = formatted_items[i:i+3]
+                    print("  " + "  ".join(pad_cell(item, col_w) for item in row))
+                print(f"\n\033[1;32mTotal: {len(items)} pruned ECC skills.\033[0m")
             else:
                 print("⚠️ ecc-suite not pruned yet. Run 'mykit sync' first.")
             return
@@ -63,57 +85,125 @@ def cmd_list(args=None):
     local_enabled = set(local_state.get("enabled_optionals", []))
     disabled_optionals = set(state.get("disabled_optionals", []))
 
-    print(f"\033[1;36m[Active Stack Profile: {active_profile}]\033[0m")
+    # --- Header Box ---
+    total_inner_width = 86
+    title_str = "🧰 MY-AI-KIT DASHBOARD"
+    profile_str = f"Active Profile: {active_profile}"
+    left_part = f"  {title_str}"
+    right_part = f"{profile_str}  "
+    space_needed = max(1, total_inner_width - str_display_width(left_part) - str_display_width(right_part))
+    
+    print("\033[1;36m┌" + "─" * total_inner_width + "┐\033[0m")
+    print(f"\033[1;36m│\033[0m  \033[1;36m{title_str}\033[0m" + " " * space_needed + f"Active Profile: \033[1;32m{active_profile}\033[0m  \033[1;36m│\033[0m")
+    print("\033[1;36m└" + "─" * total_inner_width + "┘\033[0m")
 
-    print("\n\033[1;34m[MCP Servers]\033[0m")
+    # --- MCP Servers ---
+    print("\n\033[1;34m⚡ MCP SERVERS\033[0m")
     active_mcps, disabled_mcps = get_mcp_states()
     mcps_all = manifest.get("global", {}).get("mcp_servers", {})
+    mcp_items = []
     for name in mcps_all:
         if name in active_mcps:
-            print(f"  ⚡ \033[1;32m[x]\033[0m {name}")
+            mcp_items.append(f"\033[1;32m🟢 {name}\033[0m")
         else:
-            print(f"  ⚡ [ ] {name} (disabled)")
+            mcp_items.append(f"\033[90m⚪ {name} (off)\033[0m")
 
-    print("\n\033[1;34m[Custom Subagents (agents/*.md)]\033[0m")
+    col_w = 26
+    for i in range(0, len(mcp_items), 3):
+        row = mcp_items[i:i+3]
+        formatted_row = "  ".join(pad_cell(item, col_w) for item in row)
+        print(f"  {formatted_row}")
+
+    # --- Custom Subagents ---
+    print("\n\033[1;34m🤖 CUSTOM SUBAGENTS\033[0m")
+
+    # Local agents/*.md
     agents_dir = KIT_DIR / "agents"
-    if agents_dir.exists():
-        for f in agents_dir.glob("*.md"):
-            print(f"  🤖 \033[1;32m{f.stem}\033[0m ({f.name})")
+    found_agents = list(agents_dir.glob("*.md")) if agents_dir.exists() else []
+    if found_agents:
+        print(f"  \033[90m[my-ai-kit/agents]\033[0m")
+        for f in found_agents:
+            print(f"    • \033[1;32m{f.stem}\033[0m \033[90m({f.name})\033[0m")
 
-    print("\n\033[1;34m[Core Skills (Always Global)]\033[0m")
-    for item in manifest.get("core", []):
+    # Agents from active optional skill packs
+    from src.symlink import find_pack_agents
+    pack_agent_found = False
+    for item in manifest.get("optional", []):
         name = item.get("name")
-        src = item.get("source", "local")
+        is_default = item.get("default_enabled", False)
+        is_loc = name in local_enabled
+        is_glob = (name in global_enabled) or (is_default and name not in disabled_optionals)
+        if not (is_loc or is_glob):
+            continue
         path = resolve_skill_path(item)
-        auto_up = " [auto-update]" if item.get("auto_update") else ""
-        status = "✓" if path and path.exists() else "✗"
-        print(f"  {status} {name} ({src}){auto_up}")
+        pack_agents = find_pack_agents(path, fetched_name=name) if path and path.exists() else []
+        if pack_agents:
+            pack_agent_found = True
+            print(f"  \033[90m[{name}]\033[0m \033[90m({len(pack_agents)} agents)\033[0m")
+            for f in sorted(pack_agents, key=lambda x: x.name)[:5]:
+                print(f"    • \033[1;32m{f.stem}\033[0m")
+            if len(pack_agents) > 5:
+                print(f"    \033[90m... and {len(pack_agents) - 5} more\033[0m")
 
-    print("\n\033[1;35m[Optional Skills]\033[0m")
+    if not found_agents and not pack_agent_found:
+        print("  \033[90m(No custom agents configured)\033[0m")
+
+
+    # --- Core Skills ---
+    print("\n\033[1;34m📦 CORE SKILLS (Always Global)\033[0m")
+    core_items = manifest.get("core", [])
+    if core_items:
+        for item in core_items:
+            name = item.get("name")
+            src = item.get("source", "local")
+            path = resolve_skill_path(item)
+            auto_up = " \033[90m[auto-update]\033[0m" if item.get("auto_update") else ""
+            status = "\033[1;32m✓\033[0m" if path and path.exists() else "\033[1;31m✗\033[0m"
+            print(f"  {status} \033[1m{name}\033[0m \033[90m({src})\033[0m{auto_up}")
+    else:
+        print("  \033[90m(No core skills configured)\033[0m")
+
+    # --- Optional Skills Table ---
+    print("\n\033[1;35m🧩 OPTIONAL SKILLS\033[0m")
+    
+    hdr_status = pad_cell("\033[1;37mSTATUS\033[0m", 12)
+    hdr_name = pad_cell("\033[1;37mNAME\033[0m", 24)
+    hdr_sub = pad_cell("\033[1;37mSUB-SKILLS\033[0m", 12)
+    hdr_desc = "\033[1;37mDESCRIPTION\033[0m"
+
+    print(f"  {hdr_status}  {hdr_name}  {hdr_sub}  {hdr_desc}")
+    print("  " + "─" * 12 + "  " + "─" * 24 + "  " + "─" * 12 + "  " + "─" * 32)
+
     for item in manifest.get("optional", []):
         name = item.get("name")
         desc = item.get("description", "")
         src = item.get("source", "local")
         is_default = item.get("default_enabled", False)
-        auto_up = " [auto-update]" if item.get("auto_update") else ""
 
         is_loc = name in local_enabled
         is_glob = (name in global_enabled) or (is_default and name not in disabled_optionals)
 
         if is_loc:
-            mark = "\033[1;32m[Local pwd]\033[0m"
+            status_str = "\033[1;32m📍 Local\033[0m"
         elif is_glob:
-            mark = "\033[1;36m[Global]\033[0m"
+            status_str = "\033[1;36m🌐 Global\033[0m"
         else:
-            mark = "[Off]"
+            status_str = "\033[90m⚪ Off\033[0m"
 
         path = resolve_skill_path(item)
         sub_count = len(find_sub_skills(path)) if path and path.exists() else 0
-        count_label = f" ({sub_count} sub-skills)" if sub_count > 1 else ""
+        sub_str = f"{sub_count} skills" if sub_count > 1 else "-"
 
-        print(f"  {mark} {name}{count_label} ({src}){auto_up} - {desc}")
+        name_str = f"\033[1m{name}\033[0m"
+
+        cell_stat = pad_cell(status_str, 12)
+        cell_n = pad_cell(name_str, 24)
+        cell_sb = pad_cell(sub_str, 12)
+
+        print(f"  {cell_stat}  {cell_n}  {cell_sb}  {desc}")
     
-    print("\n💡 To view detailed breakdown of a skill pack, run: \033[1mmykit list mengto\033[0m or \033[1mmykit list ecc\033[0m")
+    print("\n\033[90m💡 To view detailed breakdown of a skill pack, run: \033[1mmykit list mengto\033[0m or \033[1mmykit list ecc\033[0m")
+
 
 def cmd_reset():
     print("\033[1;33m🧹 Performing Deep Reset of all agent configurations, legacy commands, cached stores, and symlinks...\033[0m\n")
@@ -330,6 +420,13 @@ def cmd_sync():
     if ecc_base.exists():
         inc, exc = prune_skills_for_profile(ecc_base, ecc_target, active_profile)
         print(f"⚡ Stack Profile '\033[1;36m{active_profile}\033[0m': Pruned {len(inc)} ECC skills ({len(exc)} excluded) into {ecc_target}")
+
+    # 2.5 Prune ECC agents according to active profile
+    ecc_agents_src = ecc_base / "agents" if ecc_base.exists() else None
+    ecc_agents_target = Path("~/.agent-skills/store/ecc-suite-pruned-agents").expanduser()
+    if ecc_agents_src and ecc_agents_src.exists():
+        inc_a, exc_a = prune_pack_agents_for_profile(ecc_agents_src, ecc_agents_target, active_profile)
+        print(f"🤖 Stack Profile '\033[1;36m{active_profile}\033[0m': Pruned {len(inc_a)} ECC agents ({len(exc_a)} excluded) into {ecc_agents_target}")
 
     # 3. Prune MengTo skills according to active profile
     mengto_fetched = Path("~/.agent-skills/store/fetched/mengto-skills").expanduser()
