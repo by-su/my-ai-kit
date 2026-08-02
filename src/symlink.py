@@ -71,6 +71,35 @@ def find_sub_skills(base_path):
 
     return skills
 
+def find_pack_agents(base_path, fetched_name=None):
+    """
+    Returns list of agent .md files for a skill pack.
+    Priority: 1) pruned-agents dir, 2) base_path/agents/, 3) fetched/name/agents/
+    """
+    # 1. Pruned agents dir (created by prune_pack_agents_for_profile during sync)
+    if fetched_name:
+        pruned_dir = CACHE_DIR / f"{fetched_name}-pruned-agents"
+        if pruned_dir.exists():
+            found = list(pruned_dir.glob("*.md"))
+            if found:
+                return found
+
+    # 2. base_path/agents/ and fetched fallback
+    search_paths = [base_path]
+    if fetched_name:
+        fetched_path = CACHE_DIR / "fetched" / fetched_name
+        if fetched_path.exists() and fetched_path != base_path:
+            search_paths.append(fetched_path)
+
+    for path in search_paths:
+        agents_dir = path / "agents"
+        if agents_dir.exists() and agents_dir.is_dir():
+            found = list(agents_dir.glob("*.md"))
+            if found:
+                return found
+    return []
+
+
 def sync_active_skills(cwd=None):
     if cwd is None:
         cwd = Path.cwd()
@@ -83,6 +112,13 @@ def sync_active_skills(cwd=None):
     local_enabled_optionals = local_state.get("enabled_optionals", [])
 
     results = []
+
+    # 0. Clean up stale agent symlinks from all global adapter agent dirs
+    for adapter in ALL_ADAPTERS:
+        ag_dir = adapter.ensure_agent_target_dir(is_local=False)
+        for item in list(ag_dir.glob("*.md")):
+            if item.is_symlink():
+                item.unlink()
 
     # 1. Core skills -> Always Global
     for item in manifest.get("core", []):
@@ -108,16 +144,25 @@ def sync_active_skills(cwd=None):
         is_global_active = (name in global_enabled_optionals) or (is_default and name not in state.get("disabled_optionals", []))
 
         sub_map = find_skills_map(name, path)
+        pack_agents = find_pack_agents(path, fetched_name=name)
 
         if is_local_active:
             for s_name, s_path in sub_map.items():
                 for adapter in ALL_ADAPTERS:
                     _, msg = adapter.link_skill(s_name, s_path, is_local=True, cwd=cwd)
                     results.append(msg)
+            for agent_file in pack_agents:
+                for adapter in ALL_ADAPTERS:
+                    _, msg = adapter.link_agent(agent_file.stem, agent_file, is_local=True, cwd=cwd)
+                    results.append(msg)
         elif is_global_active:
             for s_name, s_path in sub_map.items():
                 for adapter in ALL_ADAPTERS:
                     _, msg = adapter.link_skill(s_name, s_path, is_local=False)
+                    results.append(msg)
+            for agent_file in pack_agents:
+                for adapter in ALL_ADAPTERS:
+                    _, msg = adapter.link_agent(agent_file.stem, agent_file, is_local=False)
                     results.append(msg)
 
     # 3. Custom Subagents (agents/*.md) -> Always Global
