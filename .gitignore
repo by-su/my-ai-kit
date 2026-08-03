@@ -6,5 +6,8 @@ __pycache__/
 # macOS
 .DS_Store
 
-# Local state (if created in repo)
-.state.json
+# Local project scope mykit state & agent links
+.mykit.json
+.claude/skills/
+.gemini/skills/
+.codex/skills/

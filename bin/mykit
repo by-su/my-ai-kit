@@ -7,24 +7,32 @@ from pathlib import Path
 KIT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(KIT_DIR))
 
-from src.config import load_manifest, load_state, save_state, load_lockfile
+from src.config import (
+    load_manifest, load_state, save_state, load_lockfile,
+    load_local_state, save_local_state
+)
 from src.symlink import sync_active_skills, resolve_skill_path
 from src.fetcher import fetch_skill_repo, update_skill_repo
 from src.mcp import sync_mcp_servers
+from src.linter import run_linter
+from src.dedupe import run_dedupe
 from adapters import ALL_ADAPTERS
 
 def cmd_list():
     manifest = load_manifest()
     state = load_state()
-    enabled_optionals = state.get("enabled_optionals", [])
-    disabled_optionals = state.get("disabled_optionals", [])
+    local_state = load_local_state()
 
-    print("\033[1;34m[MCP Servers]\033[0m")
+    global_enabled = set(state.get("enabled_optionals", []))
+    local_enabled = set(local_state.get("enabled_optionals", []))
+    disabled_optionals = set(state.get("disabled_optionals", []))
+
+    print("\033[1;34m[MCP Servers (Global)]\033[0m")
     mcps = manifest.get("global", {}).get("mcp_servers", {})
     for name in mcps:
         print(f"  ⚡ {name}")
 
-    print("\n\033[1;34m[Core Skills (Always Installed)]\033[0m")
+    print("\n\033[1;34m[Core Skills (Always Global)]\033[0m")
     for item in manifest.get("core", []):
         name = item.get("name")
         src = item.get("source", "local")
@@ -41,11 +49,19 @@ def cmd_list():
         is_default = item.get("default_enabled", False)
         auto_up = " [auto-update]" if item.get("auto_update") else ""
 
-        is_active = (name in enabled_optionals) or (is_default and name not in disabled_optionals)
-        mark = "\033[1;32m[x]\033[0m" if is_active else "[ ]"
+        is_loc = name in local_enabled
+        is_glob = (name in global_enabled) or (is_default and name not in disabled_optionals)
+
+        if is_loc:
+            mark = "\033[1;32m[Local pwd]\033[0m"
+        elif is_glob:
+            mark = "\033[1;36m[Global]\033[0m"
+        else:
+            mark = "[Off]"
+
         print(f"  {mark} {name} ({src}){auto_up} - {desc}")
 
-def cmd_enable(skill_name):
+def cmd_enable(skill_name, is_global=False):
     manifest = load_manifest()
     all_optionals = [item.get("name") for item in manifest.get("optional", [])]
     
@@ -53,37 +69,54 @@ def cmd_enable(skill_name):
         print(f"\033[1;31mError:\033[0m Optional skill '{skill_name}' not found in manifest.yaml")
         sys.exit(1)
 
-    state = load_state()
-    enabled = set(state.get("enabled_optionals", []))
-    disabled = set(state.get("disabled_optionals", []))
-    
-    enabled.add(skill_name)
-    disabled.discard(skill_name)
-    
-    state["enabled_optionals"] = list(enabled)
-    state["disabled_optionals"] = list(disabled)
-    save_state(state)
+    cwd = Path.cwd()
 
-    print(f"✓ Enabled optional skill '{skill_name}'")
+    if is_global:
+        state = load_state()
+        enabled = set(state.get("enabled_optionals", []))
+        disabled = set(state.get("disabled_optionals", []))
+        enabled.add(skill_name)
+        disabled.discard(skill_name)
+        state["enabled_optionals"] = list(enabled)
+        state["disabled_optionals"] = list(disabled)
+        save_state(state)
+        print(f"✓ Enabled optional skill '{skill_name}' [Global Scope]")
+    else:
+        local_state = load_local_state(cwd)
+        enabled = set(local_state.get("enabled_optionals", []))
+        enabled.add(skill_name)
+        local_state["enabled_optionals"] = list(enabled)
+        save_local_state(local_state, cwd)
+        print(f"✓ Enabled optional skill '{skill_name}' [Local Scope: {cwd}]")
+
     cmd_sync()
 
-def cmd_disable(skill_name):
-    state = load_state()
-    enabled = set(state.get("enabled_optionals", []))
-    disabled = set(state.get("disabled_optionals", []))
-    
-    enabled.discard(skill_name)
-    disabled.add(skill_name)
-    
-    state["enabled_optionals"] = list(enabled)
-    state["disabled_optionals"] = list(disabled)
-    save_state(state)
+def cmd_disable(skill_name, is_global=False):
+    cwd = Path.cwd()
 
-    # Unlink from adapters
-    for adapter in ALL_ADAPTERS:
-        adapter.unlink_skill(skill_name)
+    if is_global:
+        state = load_state()
+        enabled = set(state.get("enabled_optionals", []))
+        disabled = set(state.get("disabled_optionals", []))
+        enabled.discard(skill_name)
+        disabled.add(skill_name)
+        state["enabled_optionals"] = list(enabled)
+        state["disabled_optionals"] = list(disabled)
+        save_state(state)
 
-    print(f"✓ Disabled optional skill '{skill_name}'")
+        for adapter in ALL_ADAPTERS:
+            adapter.unlink_skill(skill_name, is_local=False)
+        print(f"✓ Disabled optional skill '{skill_name}' [Global Scope]")
+    else:
+        local_state = load_local_state(cwd)
+        enabled = set(local_state.get("enabled_optionals", []))
+        enabled.discard(skill_name)
+        local_state["enabled_optionals"] = list(enabled)
+        save_local_state(local_state, cwd)
+
+        for adapter in ALL_ADAPTERS:
+            adapter.unlink_skill(skill_name, is_local=True, cwd=cwd)
+        print(f"✓ Disabled optional skill '{skill_name}' [Local Scope: {cwd}]")
 
 def cmd_sync():
     manifest = load_manifest()
@@ -102,8 +135,8 @@ def cmd_sync():
     # Sync MCPs
     mcp_results = sync_mcp_servers()
 
-    # Sync symlinks
-    results = sync_active_skills()
+    # Sync symlinks (both global & pwd local)
+    results = sync_active_skills(cwd=Path.cwd())
     print("\033[1;32m✓ Synchronized skills and MCPs across all adapters:\033[0m")
     for r in mcp_results:
         print(f"  - {r}")
@@ -144,7 +177,7 @@ def cmd_doctor():
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: mykit [list|install|remove|sync|update|doctor|bootstrap]")
+        print("Usage: mykit [list|install|remove|sync|update|lint|dedupe|doctor|bootstrap]")
         sys.exit(1)
 
     cmd = sys.argv[1]
@@ -153,19 +186,29 @@ def main():
         cmd_list()
     elif cmd in ("install", "enable"):
         if len(sys.argv) < 3:
-            print("Usage: mykit install <skill-name>")
+            print("Usage: mykit install <skill-name> [--global]")
             sys.exit(1)
-        cmd_enable(sys.argv[2])
+        is_global = "--global" in sys.argv
+        skill_name = sys.argv[2] if sys.argv[2] != "--global" else sys.argv[3]
+        cmd_enable(skill_name, is_global=is_global)
     elif cmd in ("remove", "disable"):
         if len(sys.argv) < 3:
-            print("Usage: mykit remove <skill-name>")
+            print("Usage: mykit remove <skill-name> [--global]")
             sys.exit(1)
-        cmd_disable(sys.argv[2])
+        is_global = "--global" in sys.argv
+        skill_name = sys.argv[2] if sys.argv[2] != "--global" else sys.argv[3]
+        cmd_disable(skill_name, is_global=is_global)
     elif cmd in ("sync", "bootstrap"):
         cmd_sync()
     elif cmd == "update":
         target = sys.argv[2] if len(sys.argv) >= 3 else None
         cmd_update(target)
+    elif cmd == "lint":
+        fix_option = "--fix" in sys.argv
+        run_linter(fix=fix_option)
+    elif cmd == "dedupe":
+        threshold = float(sys.argv[2]) if len(sys.argv) >= 3 and sys.argv[2].replace('.', '', 1).isdigit() else 30.0
+        run_dedupe(threshold=threshold)
     elif cmd == "doctor":
         cmd_doctor()
     else:
