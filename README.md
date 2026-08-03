@@ -129,8 +129,31 @@ mykit install prompt-architect
 
 `./bootstrap.sh`를 터미널에서 직접 실행하면 `mykit setup`이 열려 프로필 선택 또는 custom profile 생성, pruning 언어/스택, 전역 Optional 스킬, 선택한 팩의 pruning 여부, MCP 서버를 선택합니다. custom profile을 고른 경우 첫 setup은 아무 언어도 미리 선택하지 않습니다. Pruning 질문은 `ecc-suite` 또는 `mengto-skills`를 전역 Optional로 선택했을 때만 표시됩니다. `↑/↓`로 이동하고 Space 또는 클릭으로 선택을 토글한 뒤 Enter로 다음 단계로 이동합니다. `b`로 이전 단계로 돌아가고, `q`/Esc로 취소합니다. 파이프/CI처럼 비대화형으로 실행될 때는 기존처럼 기본값으로 `mykit sync`만 실행합니다.
 
+Bootstrap 안전 옵션:
+
+```bash
+./bootstrap.sh --dry-run
+./bootstrap.sh --non-interactive
+./bootstrap.sh --no-path
+./bootstrap.sh --no-agent-instructions
+```
+
+Bootstrap이 수정할 수 있는 경로:
+
+```text
+~/.zshrc
+~/.bashrc
+~/.claude/CLAUDE.md
+~/.gemini/antigravity-cli/AGENTS.md
+~/.codex/instructions.md
+~/.codex/AGENTS.md
+~/.agent-skills/state.json
+Claude/Gemini/Antigravity/Codex MCP config files
+```
+
 ---
 
 ## 🔒 보안 및 버전 고정 (`manifest.lock.json`)
-* 외부 GitHub 스킬은 `auto_update: false`로 설정하면 `manifest.lock.json`에 기록된 **Git Commit SHA** 버전만 고정되어 설치되므로, 외부 수정으로 인한 오염을 방지할 수 있습니다.
+* 외부 GitHub 스킬은 기본 `auto_update: false`입니다. `manifest.lock.json`에 기록된 **Git Commit SHA** 버전으로 고정되어 설치되므로, 외부 수정으로 인한 오염을 방지할 수 있습니다.
 * 비활성 Optional GitHub 스킬은 기본 `bootstrap` / `mykit sync`에서 clone하지 않습니다. 필요한 스킬은 `mykit install <skill-name>` 또는 `mykit prefetch <skill-name>`로 가져옵니다.
+* 최신 upstream으로 올리려면 `mykit update <skill-name>` 또는 `mykit update --all`을 명시적으로 실행하세요.

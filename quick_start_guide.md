@@ -21,6 +21,7 @@ source ~/.zshrc
 * **터미널 `PATH` 자동 등록**: `~/.zshrc` 및 `~/.bashrc`에 `mykit` 실행 경로 자동 연결
 * **초기 선택 마법사 실행**: 터미널에서 직접 실행하면 프로필 선택 또는 custom profile 생성, pruning 언어/스택, 전역 Optional 스킬, 선택한 팩의 pruning 여부, MCP 선택
 * **활성 GitHub 스킬 lazy 다운로드**: 기본 활성 스킬만 다운로드하고 비활성 Optional은 필요할 때 가져옴
+* **재현 가능한 기본 설치**: 외부 GitHub 스킬은 기본적으로 lockfile commit을 사용하고 자동 업데이트하지 않음
 * **전체 에이전트 동기화 (`mykit sync`)**:
   - 6개 활성 MCP 서버 4개 에이전트에 자동 주입
   - 21개 안전 명령어 자동 승인 규칙 일괄 배포
@@ -48,6 +49,15 @@ source ~/.zshrc
 | `mykit install <skill>` | 현재 작업 중인 프로젝트 디렉터리(`pwd`)로 스킬 설치 | 프로젝트 로컬 |
 | `mykit lint [--fix]` | 스킬 YAML 문법, 이름 중복 충돌 및 깨진 링크 자동 검사 | 검증 |
 | `mykit dedupe` | 스킬 간 텍스트/내용 겹침을 분석하여 유사 중복 탐지 | 중복 점검 |
+
+Bootstrap 옵션:
+
+```bash
+./bootstrap.sh --dry-run
+./bootstrap.sh --non-interactive
+./bootstrap.sh --no-path
+./bootstrap.sh --no-agent-instructions
+```
 
 ---
 
