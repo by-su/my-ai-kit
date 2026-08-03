@@ -489,7 +489,7 @@ def cmd_setup():
         for cat, kws in SETUP_KEYWORD_CATEGORIES.items()
     }
     profile_keywords = get_setup_profile_keywords(manifest)
-    has_existing_profile = STATE_FILE.exists() and bool(state.get("active_profile"))
+    has_existing_profile = (STATE_FILE.exists() or bool(state)) and bool(state.get("active_profile") or get_active_profile())
     current_profile = state.get("active_profile", get_active_profile()) if has_existing_profile else "add"
     selected_profile = current_profile
     custom_profile_name = state.get("custom_profile_name", "default")

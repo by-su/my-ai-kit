@@ -56,4 +56,11 @@ For multi-step tasks, state a brief plan:
 2. Step → verify
 3. Step → verify
 
-Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
+
+### 5. Permission & Token Optimization Rules
+
+**Optimize for prompt-free execution and minimal token usage.**
+
+- **No Shell Chaining for Approved Commands**: Do not chain commands with `&&` or `;` for permission-approved tools like `git`. Execute commands individually so they qualify for single-token prefix auto-approval.
+- **Python Execution Strategy**: Avoid inline python strings (`python3 -c "..."`). Always write python code into `<appDataDir>/brain/<id>/scratch/script.py` using file writing tools and execute `python3 scratch/script.py`. This ensures 1-turn completion, zero shell escaping errors, minimal token re-encoding, and prompt-free execution.
+
