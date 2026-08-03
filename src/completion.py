@@ -24,9 +24,10 @@ _mykit() {
                 'mcp:View or toggle MCP servers (enable, disable)'
                 'install:Install optional skill to pwd (or --global)'
                 'remove:Remove optional skill from pwd (or --global)'
-                'sync:Synchronize all skills, MCPs, and agents across adapters'
+                'sync:Synchronize active skills, MCPs, and agents across adapters'
+                'prefetch:Download GitHub skills without enabling them'
                 'reset:Reset all agent configs and symlinks cleanly'
-                'update:Update remote GitHub skills to latest commits'
+                'update:Update fetched remote GitHub skills to latest commits'
                 'lint:Check skill frontmatter and symlink integrity (--fix)'
                 'dedupe:Detect semantic overlaps across skills'
                 'doctor:Run health check on manifest, MCP secrets, and adapters'
@@ -61,12 +62,17 @@ _mykit() {
                         _describe -t env_cmds 'env command' env_cmds
                     fi
                     ;;
-                install|enable|remove|disable)
+                install|enable|remove|disable|prefetch)
                     if [[ $#words -eq 3 ]]; then
                         local -a skills
                         skills=($(mykit_get_optionals))
                         _describe -t skills 'optional skill' skills
                     fi
+                    ;;
+                sync|update)
+                    local -a common_opts
+                    common_opts=('--all')
+                    _describe -t common_opts 'option' common_opts
                     ;;
                 completion)
                     local -a comp_opts
@@ -95,7 +101,7 @@ _mykit_completions() {
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-    opts="list stats env stack mcp install remove sync reset update lint dedupe doctor completion"
+    opts="list stats env stack mcp install remove sync prefetch reset update lint dedupe doctor completion"
 
     if [ $COMP_CWORD -eq 1 ]; then
         COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
@@ -115,8 +121,12 @@ _mykit_completions() {
             COMPREPLY=( $(compgen -W "setup" -- ${cur}) )
             return 0
             ;;
-        install|remove)
-            COMPREPLY=( $(compgen -W "db-helper ecc-suite mengto-skills prompt-architect app-store-screenshots spec-kit --global" -- ${cur}) )
+        install|remove|prefetch)
+            COMPREPLY=( $(compgen -W "db-helper ecc-suite mengto-skills prompt-architect app-store-screenshots spec-kit --global --all" -- ${cur}) )
+            return 0
+            ;;
+        sync|update)
+            COMPREPLY=( $(compgen -W "--all" -- ${cur}) )
             return 0
             ;;
         completion)

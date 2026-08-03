@@ -19,7 +19,7 @@ source ~/.zshrc
 ### ⚙️ `./bootstrap.sh`가 내부에서 처리하는 작업
 * **`bin/mykit` 실행 권한 자동 부여**: `chmod +x` 실행
 * **터미널 `PATH` 자동 등록**: `~/.zshrc` 및 `~/.bashrc`에 `mykit` 실행 경로 자동 연결
-* **외부 GitHub 스킬 자동 다운로드**: `manifest.lock.json`에 고정된 commit SHA 버전으로 다운로드
+* **활성 GitHub 스킬 lazy 다운로드**: 기본 활성 스킬만 다운로드하고 비활성 Optional은 필요할 때 가져옴
 * **전체 에이전트 동기화 (`mykit sync`)**:
   - 6개 활성 MCP 서버 4개 에이전트에 자동 주입
   - 21개 안전 명령어 자동 승인 규칙 일괄 배포
@@ -33,7 +33,9 @@ source ~/.zshrc
 | 명령어 | 설명 | 비고 |
 | :--- | :--- | :--- |
 | `mykit list` | 현재 스택 프로필, MCP, 서브 에이전트, 스킬 목록 상태 조회 | 현황 확인 |
-| `mykit sync` | 마니페스트 기반 전체 에이전트(Claude, Antigravity, Codex) 동기화 | 핵심 배포 |
+| `mykit sync` | 활성 스킬만 lazy fetch 후 전체 에이전트(Claude, Antigravity, Codex) 동기화 | 핵심 배포 |
+| `mykit sync --all` | 비활성 Optional까지 모두 fetch 후 동기화 | 전체 사전 다운로드 |
+| `mykit prefetch <skill>` | 스킬을 활성화하지 않고 미리 다운로드 | 선택 다운로드 |
 | `mykit reset` | 찌꺼기 심볼릭 링크 및 구버전 설정 100% 클린 리셋 | 초기화 |
 | `mykit stats` | 시스템 통계 대시보드 (스킬 감축률, 토큰 절약량, 에이전트 연결 현황) | 시각화 |
 | `mykit env setup` | MCP API 키 및 시크릿 인터랙티브 대화형 등록 마법사 | 키 세팅 |

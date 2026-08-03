@@ -19,18 +19,20 @@
 | `mykit env setup` | MCP API 키 및 시크릿 인터랙티브 자동 대화형 등록 마법사 |
 | `mykit mcp` | 등록된 MCP 서버 활성화 상태 조회 및 토글 (`mykit mcp enable \| disable <mcp-name>`) |
 | `mykit stack` | 현재 스택 프로필 조회 및 전환 (`mykit stack use personal \| work \| full`) |
-| `mykit sync` | `manifest.yaml` 기반 스택 프로필, 안전 명령어 자동 승인, MCP, 서브 에이전트, Core/Local 스킬 전체 동기화 |
+| `mykit sync` | 활성 스킬만 lazy fetch한 뒤 스택 프로필, 안전 명령어, MCP, 서브 에이전트 동기화 |
+| `mykit sync --all` | 비활성 Optional까지 포함해 모든 GitHub 스킬을 명시적으로 fetch 후 동기화 |
+| `mykit prefetch <skill-name\|--all>` | Optional 스킬을 활성화하지 않고 미리 다운로드 |
 | `mykit completion install` | Zsh / Bash 터미널 자동 완성(Tab Completion) 1초 등록 |
-| `mykit update [skill-name]` | 외부 GitHub 스킬 최신 커밋으로 업데이트 및 Lockfile 갱신 |
+| `mykit update [skill-name] [--all]` | fetch된 GitHub 스킬 또는 지정 스킬을 최신 커밋으로 업데이트 및 Lockfile 갱신 |
 | `mykit lint [--fix]` | 스킬 YAML 문법, 이름 중복 충돌 및 깨진 심볼릭 링크 자동 점검 (`--fix` 옵션으로 유령 링크 자동 정리) |
-| `mykit dedupe [threshold]` | 스킬 간 키워드/내용 겹침을 분석하여 유사 중복 스킬 탐지 (기본 30%) |
+| `mykit dedupe [threshold] [--skill <name>] [--all]` | 활성 스킬 간 키워드/내용 겹침을 분석하여 유사 중복 스킬 탐지 (`--all`은 전체 등록 스킬 검사) |
 | `mykit doctor` | 설정 파일 검증, 자동 승인 커맨드 목록, MCP 헬스체크 및 에이전트별 연결 상태 점검 |
 
 ---
 
 ## 🔄 스킬 설치 시 자동 중복 스캔 훅 (Post-Install Auto-Dedupe Hook)
 
-새로운 스킬을 등록(`mykit install <skill-name>`)하면 동기화 완료 직후 **자동으로 `mykit dedupe` 훅이 작동**하여, 새로 추가된 스킬이 기존 스킬과 30% 이상 텍스트/지침이 겹치는지 실시간으로 스캔하고 알려줍니다.
+새로운 스킬을 등록(`mykit install <skill-name>`)하면 동기화 완료 직후 **자동으로 `mykit dedupe` 훅이 작동**하여, 새로 추가된 스킬이 활성 스킬과 30% 이상 텍스트/지침이 겹치는지 실시간으로 스캔하고 알려줍니다.
 
 [`manifest.yaml`](file:///Users/bysu/workspace/my-ai-kit/manifest.yaml) 설정:
 ```yaml
@@ -122,7 +124,10 @@ mykit install prompt-architect
 ./bootstrap.sh
 ```
 
+기본 bootstrap/sync는 `default_enabled: true`이거나 직접 설치한 활성 스킬만 다운로드합니다. 비활성 Optional 스킬까지 모두 받아두려면 `mykit sync --all` 또는 `mykit prefetch --all`을 명시적으로 실행하세요.
+
 ---
 
 ## 🔒 보안 및 버전 고정 (`manifest.lock.json`)
 * 외부 GitHub 스킬은 `auto_update: false`로 설정하면 `manifest.lock.json`에 기록된 **Git Commit SHA** 버전만 고정되어 설치되므로, 외부 수정으로 인한 오염을 방지할 수 있습니다.
+* 비활성 Optional GitHub 스킬은 기본 `bootstrap` / `mykit sync`에서 clone하지 않습니다. 필요한 스킬은 `mykit install <skill-name>` 또는 `mykit prefetch <skill-name>`로 가져옵니다.

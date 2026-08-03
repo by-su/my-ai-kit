@@ -8,7 +8,7 @@ UNIVERSAL_UTILITIES = {
     'refactor', 'cleaner', 'verification', 'performance',
     'architecture', 'architect', 'quality', 'debug', 'skill-create',
     'instinct', 'status', 'loop', 'tdd', 'mcp', 'prompt', 'clean', 'ui', 'design',
-    'write', 'writing', 'article', 'copywriting', 'post', 'docs', 'doc', 'readme', 'x', 'codex',
+    'write', 'writing', 'article', 'copywriting', 'post', 'docs', 'doc', 'readme', 'fix', 'x', 'codex',
 }
 
 
@@ -48,12 +48,12 @@ def is_skill_relevant(skill_name, profile_keywords):
         return True
 
     lower_name = skill_name.lower()
+    parts = lower_name.replace('-', ' ').replace('_', ' ').split()
     
     # 1. Exact or keyword match against active stack profile
     for kw in profile_keywords:
         kw_lower = kw.lower()
         if len(kw_lower) <= 3:
-            parts = lower_name.replace('-', ' ').replace('_', ' ').split()
             if kw_lower in parts:
                 return True
         elif kw_lower in lower_name:
@@ -61,7 +61,10 @@ def is_skill_relevant(skill_name, profile_keywords):
             
     # 2. Match against universal developer utilities
     for util in UNIVERSAL_UTILITIES:
-        if util in lower_name:
+        if len(util) <= 3:
+            if util in parts:
+                return True
+        elif util in lower_name:
             return True
             
     return False

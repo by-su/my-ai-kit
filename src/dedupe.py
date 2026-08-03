@@ -2,7 +2,7 @@ import os
 import sys
 import re
 from pathlib import Path
-from src.config import load_manifest
+from src.config import load_manifest, load_state, load_local_state
 from src.symlink import resolve_skill_path
 
 def extract_tokens(text):
@@ -20,9 +20,27 @@ def calculate_jaccard_similarity(set1, set2):
     union = len(set1.union(set2))
     return (intersection / union) * 100
 
-def run_dedupe(threshold=40.0):
+def get_dedupe_skill_items(manifest, include_all=False, cwd=None):
+    if include_all:
+        return manifest.get("core", []) + manifest.get("optional", [])
+
+    state = load_state()
+    local_state = load_local_state(cwd)
+    global_enabled = set(state.get("enabled_optionals", []))
+    local_enabled = set(local_state.get("enabled_optionals", []))
+    disabled = set(state.get("disabled_optionals", []))
+
+    items = list(manifest.get("core", []))
+    for item in manifest.get("optional", []):
+        name = item.get("name")
+        is_default = item.get("default_enabled", False)
+        if name in local_enabled or name in global_enabled or (is_default and name not in disabled):
+            items.append(item)
+    return items
+
+def run_dedupe(threshold=40.0, focus_skill=None, include_all=False, cwd=None):
     manifest = load_manifest()
-    all_skills = manifest.get("core", []) + manifest.get("optional", [])
+    all_skills = get_dedupe_skill_items(manifest, include_all=include_all, cwd=cwd)
     
     print(f"\033[1;36m🔍 Running mykit dedupe (Semantic Overlap Detector)...\033[0m")
     print(f"Similarity Threshold: {threshold}%\n")
@@ -52,7 +70,8 @@ def run_dedupe(threshold=40.0):
             except Exception:
                 pass
 
-    print(f"Analyzing {len(skill_tokens)} total skill documents for semantic overlaps...")
+    scope_label = "total" if include_all else "active"
+    print(f"Analyzing {len(skill_tokens)} {scope_label} skill documents for semantic overlaps...")
     
     names = list(skill_tokens.keys())
     overlaps = []
@@ -68,10 +87,22 @@ def run_dedupe(threshold=40.0):
 
     overlaps.sort(key=lambda x: x[0], reverse=True)
 
+    if focus_skill:
+        overlaps = [
+            overlap for overlap in overlaps
+            if overlap[1].split("/", 1)[0] == focus_skill or overlap[2].split("/", 1)[0] == focus_skill
+        ]
+
     if not overlaps:
-        print("\033[1;32m🎉 No significant semantic overlaps found among skills!\033[0m")
+        if focus_skill:
+            print(f"\033[1;32m🎉 No significant semantic overlaps found for '{focus_skill}'!\033[0m")
+        else:
+            print("\033[1;32m🎉 No significant semantic overlaps found among skills!\033[0m")
     else:
-        print(f"\033[1;33m⚠️ Found {len(overlaps)} potential overlapping skill pair(s):\033[0m\n")
+        if focus_skill:
+            print(f"\033[1;33m⚠️ Found {len(overlaps)} potential overlapping pair(s) involving '{focus_skill}':\033[0m\n")
+        else:
+            print(f"\033[1;33m⚠️ Found {len(overlaps)} potential overlapping skill pair(s):\033[0m\n")
         for score, n1, n2 in overlaps[:15]:
             print(f"  • \033[1;35m[{score:.1f}% Similarity]\033[0m {n1} ↔ {n2}")
 

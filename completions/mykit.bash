@@ -6,7 +6,7 @@ _mykit_completions() {
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-    opts="list stats env stack mcp install remove sync reset update lint dedupe doctor completion"
+    opts="list stats env stack mcp install remove sync prefetch reset update lint dedupe doctor completion"
 
     if [ $COMP_CWORD -eq 1 ]; then
         COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
@@ -26,8 +26,12 @@ _mykit_completions() {
             COMPREPLY=( $(compgen -W "setup" -- ${cur}) )
             return 0
             ;;
-        install|remove)
-            COMPREPLY=( $(compgen -W "db-helper ecc-suite mengto-skills prompt-architect --global" -- ${cur}) )
+        install|remove|prefetch)
+            COMPREPLY=( $(compgen -W "db-helper ecc-suite mengto-skills prompt-architect --global --all" -- ${cur}) )
+            return 0
+            ;;
+        sync|update)
+            COMPREPLY=( $(compgen -W "--all" -- ${cur}) )
             return 0
             ;;
         completion)

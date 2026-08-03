@@ -11,7 +11,7 @@ KIT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(KIT_DIR))
 
 from src.config import (
-    load_manifest, load_state, save_state, load_lockfile,
+    CACHE_DIR, load_manifest, load_state, save_state, load_lockfile,
     load_local_state, save_local_state, get_active_profile, set_active_profile
 )
 from src.symlink import sync_active_skills, resolve_skill_path, find_sub_skills
@@ -24,6 +24,27 @@ from src.pruner import prune_skills_for_profile, prune_mengto_skills_for_profile
 from src.completion import generate_completion, install_completion
 from src.dashboard import setup_env_interactive, show_stats
 from adapters import ALL_ADAPTERS
+
+def get_active_skill_items(manifest, cwd=None, include_all=False):
+    if include_all:
+        return manifest.get("core", []) + manifest.get("optional", [])
+
+    if cwd is None:
+        cwd = Path.cwd()
+
+    state = load_state()
+    local_state = load_local_state(cwd)
+    global_enabled = set(state.get("enabled_optionals", []))
+    local_enabled = set(local_state.get("enabled_optionals", []))
+    disabled = set(state.get("disabled_optionals", []))
+
+    items = list(manifest.get("core", []))
+    for item in manifest.get("optional", []):
+        name = item.get("name")
+        is_default = item.get("default_enabled", False)
+        if name in local_enabled or name in global_enabled or (is_default and name not in disabled):
+            items.append(item)
+    return items
 
 def str_display_width(s):
     clean = re.sub(r'\033\[[0-9;]*m', '', str(s))
@@ -368,7 +389,7 @@ def cmd_enable(skill_name, is_global=False):
     auto_dedupe = manifest.get("auto_dedupe_on_install", True)
     if auto_dedupe:
         print("\n\033[1;36m🔄 Post-Install Hook: Running automatic dedupe check for newly installed skill...\033[0m\n")
-        run_dedupe(threshold=30.0)
+        run_dedupe(threshold=30.0, focus_skill=skill_name)
 
 def cmd_disable(skill_name, is_global=False):
     cwd = Path.cwd()
@@ -397,14 +418,14 @@ def cmd_disable(skill_name, is_global=False):
             adapter.unlink_skill(skill_name, is_local=True, cwd=cwd)
         print(f"✓ Disabled optional skill '{skill_name}' [Local Scope: {cwd}]")
 
-def cmd_sync():
+def cmd_sync(include_all=False):
     manifest = load_manifest()
     lockfile = load_lockfile()
     active_profile = get_active_profile()
 
-    # 1. Fetch github skills first (including ecc-suite and mengto-skills)
-    all_skills = manifest.get("core", []) + manifest.get("optional", [])
-    for item in all_skills:
+    # 1. Fetch only active GitHub skills by default. Use --all for explicit prefetch.
+    active_skills = get_active_skill_items(manifest, cwd=Path.cwd(), include_all=include_all)
+    for item in active_skills:
         if item.get("source") == "github":
             name = item.get("name")
             url = item.get("url")
@@ -451,8 +472,9 @@ def cmd_sync():
     for r in results:
         print(f"  - {r}")
 
-def cmd_update(target_skill=None):
+def cmd_update(target_skill=None, include_all=False):
     manifest = load_manifest()
+    lockfile = load_lockfile()
     all_skills = manifest.get("core", []) + manifest.get("optional", [])
     github_skills = {item.get("name"): item for item in all_skills if item.get("source") == "github"}
 
@@ -463,11 +485,46 @@ def cmd_update(target_skill=None):
         item = github_skills[target_skill]
         update_skill_repo(item.get("name"), item.get("url"))
     else:
-        print("🔄 Updating all GitHub skills to latest remote commits...")
-        for name, item in github_skills.items():
+        if include_all:
+            update_items = github_skills
+            print("🔄 Updating all GitHub skills to latest remote commits...")
+        else:
+            locked = set(lockfile.get("skills", {}).keys())
+            fetched_dir = CACHE_DIR / "fetched"
+            fetched = {p.name for p in fetched_dir.iterdir()} if fetched_dir.exists() else set()
+            update_items = {name: item for name, item in github_skills.items() if name in locked or name in fetched}
+            print("🔄 Updating fetched GitHub skills to latest remote commits...")
+            if not update_items:
+                print("No fetched GitHub skills found. Use 'mykit prefetch <skill-name>' or 'mykit update --all'.")
+                return
+        for name, item in update_items.items():
             update_skill_repo(name, item.get("url"))
             
     cmd_sync()
+
+def cmd_prefetch(args):
+    manifest = load_manifest()
+    lockfile = load_lockfile()
+    all_skills = manifest.get("core", []) + manifest.get("optional", [])
+    github_skills = {item.get("name"): item for item in all_skills if item.get("source") == "github"}
+
+    if not args:
+        print("Usage: mykit prefetch <skill-name|--all>")
+        sys.exit(1)
+
+    if "--all" in args:
+        items = github_skills.values()
+    else:
+        missing = [name for name in args if name not in github_skills]
+        if missing:
+            print(f"\033[1;31mError:\033[0m GitHub skill(s) not found in manifest.yaml: {', '.join(missing)}")
+            sys.exit(1)
+        items = [github_skills[name] for name in args]
+
+    for item in items:
+        name = item.get("name")
+        commit_sha = lockfile.get("skills", {}).get(name, {}).get("commit")
+        fetch_skill_repo(name, item.get("url"), commit_sha, auto_update=item.get("auto_update", False))
 
 def cmd_doctor():
     print("\033[1;36m--- Running mykit doctor ---\033[0m")
@@ -499,7 +556,7 @@ def cmd_doctor():
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: mykit [list|stats|env|mcp|stack|install|remove|sync|reset|update|lint|dedupe|doctor|completion|bootstrap]")
+        print("Usage: mykit [list|stats|env|mcp|stack|install|remove|sync|prefetch|reset|update|lint|dedupe|doctor|completion|bootstrap]")
         sys.exit(1)
 
     cmd = sys.argv[1]
@@ -539,16 +596,35 @@ def main():
         skill_name = sys.argv[2] if sys.argv[2] != "--global" else sys.argv[3]
         cmd_disable(skill_name, is_global=is_global)
     elif cmd in ("sync", "bootstrap"):
-        cmd_sync()
+        cmd_sync(include_all="--all" in sys.argv[2:])
+    elif cmd == "prefetch":
+        cmd_prefetch(sys.argv[2:])
     elif cmd == "update":
-        target = sys.argv[2] if len(sys.argv) >= 3 else None
-        cmd_update(target)
+        args = sys.argv[2:]
+        include_all = "--all" in args
+        if include_all:
+            args.remove("--all")
+        target = args[0] if args else None
+        cmd_update(target, include_all=include_all)
     elif cmd == "lint":
         fix_option = "--fix" in sys.argv
         run_linter(fix=fix_option)
     elif cmd == "dedupe":
-        threshold = float(sys.argv[2]) if len(sys.argv) >= 3 and sys.argv[2].replace('.', '', 1).isdigit() else 30.0
-        run_dedupe(threshold=threshold)
+        args = sys.argv[2:]
+        focus_skill = None
+        include_all = False
+        if "--all" in args:
+            include_all = True
+            args.remove("--all")
+        if "--skill" in args:
+            idx = args.index("--skill")
+            if idx + 1 >= len(args):
+                print("Usage: mykit dedupe [threshold] [--skill <skill-name>] [--all]")
+                sys.exit(1)
+            focus_skill = args[idx + 1]
+            del args[idx:idx + 2]
+        threshold = float(args[0]) if args and args[0].replace('.', '', 1).isdigit() else 30.0
+        run_dedupe(threshold=threshold, focus_skill=focus_skill, include_all=include_all)
     elif cmd == "doctor":
         cmd_doctor()
     else:
