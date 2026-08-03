@@ -10,6 +10,7 @@ sys.path.insert(0, str(KIT_DIR))
 from src.config import load_manifest, load_state, save_state, load_lockfile
 from src.symlink import sync_active_skills, resolve_skill_path
 from src.fetcher import fetch_skill_repo, update_skill_repo
+from src.mcp import sync_mcp_servers
 from adapters import ALL_ADAPTERS
 
 def cmd_list():
@@ -18,7 +19,12 @@ def cmd_list():
     enabled_optionals = state.get("enabled_optionals", [])
     disabled_optionals = state.get("disabled_optionals", [])
 
-    print("\033[1;34m[Core Skills (Always Installed)]\033[0m")
+    print("\033[1;34m[MCP Servers]\033[0m")
+    mcps = manifest.get("global", {}).get("mcp_servers", {})
+    for name in mcps:
+        print(f"  ⚡ {name}")
+
+    print("\n\033[1;34m[Core Skills (Always Installed)]\033[0m")
     for item in manifest.get("core", []):
         name = item.get("name")
         src = item.get("source", "local")
@@ -93,9 +99,14 @@ def cmd_sync():
             commit_sha = lockfile.get("skills", {}).get(name, {}).get("commit")
             fetch_skill_repo(name, url, commit_sha, auto_update=auto_update)
 
+    # Sync MCPs
+    mcp_results = sync_mcp_servers()
+
     # Sync symlinks
     results = sync_active_skills()
-    print("\033[1;32m✓ Synchronized skills across all adapters:\033[0m")
+    print("\033[1;32m✓ Synchronized skills and MCPs across all adapters:\033[0m")
+    for r in mcp_results:
+        print(f"  - {r}")
     for r in results:
         print(f"  - {r}")
 
@@ -120,7 +131,8 @@ def cmd_update(target_skill=None):
 def cmd_doctor():
     print("\033[1;36m--- Running mykit doctor ---\033[0m")
     manifest = load_manifest()
-    print(f"✓ Manifest loaded cleanly ({len(manifest.get('core', []))} core, {len(manifest.get('optional', []))} optional)")
+    mcps = manifest.get("global", {}).get("mcp_servers", {})
+    print(f"✓ Manifest loaded cleanly ({len(mcps)} MCPs, {len(manifest.get('core', []))} core, {len(manifest.get('optional', []))} optional)")
     
     lockfile = load_lockfile()
     print(f"✓ Lockfile loaded ({len(lockfile.get('skills', {}))} locked repos)")
