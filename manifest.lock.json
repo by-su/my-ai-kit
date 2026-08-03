@@ -1,10 +1,10 @@
 {
   "version": "1.0",
-  "generated_at": "2026-08-01T00:00:00Z",
+  "generated_at": "2026-08-02T18:26:34Z",
   "skills": {
-    "sample-open-skill": {
-      "url": "https://github.com/anthropics/anthropic-quickstarts.git",
-      "commit": "370e18d4a20ff5fd4bc1a6bf11d5105b2383977c"
+    "ecc-suite": {
+      "url": "https://github.com/affaan-m/everything-claude-code.git",
+      "commit": "e4e4163101f162881e628f300a9ca4e6a940bcea"
     },
     "prompt-architect": {
       "url": "https://github.com/ckelsoe/prompt-architect.git",
@@ -13,6 +13,38 @@
     "mengto-skills": {
       "url": "https://github.com/MengTo/Skills.git",
       "commit": "46abf7860d716c33de8217b6ff9f75debf28afaf"
+    },
+    "app-store-screenshots": {
+      "url": "https://github.com/ParthJadhav/app-store-screenshots.git",
+      "commit": "e58f81961b5fd9e3969c680061f7cfd8f286ae55"
+    },
+    "spec-kit": {
+      "url": "https://github.com/github/spec-kit.git",
+      "commit": "d1e86f638277a99b82715c22c90558cd58d3cffd"
+    },
+    "promptfoo": {
+      "url": "https://github.com/promptfoo/promptfoo.git",
+      "commit": "26b725bd9496351ef269380c9fd83b9c2c338a0e"
+    },
+    "inspect-ai": {
+      "url": "https://github.com/UKGovernmentBEIS/inspect_ai.git",
+      "commit": "1ea01a9e1b3c94db3cdf93ce5583ffebf86e159f"
+    },
+    "screenshot-to-code": {
+      "url": "https://github.com/abi/screenshot-to-code.git",
+      "commit": "d026163f586dfa8c5c10d28c36edd59a9d3b0e88"
+    },
+    "openui": {
+      "url": "https://github.com/wandb/openui.git",
+      "commit": "42d7ab4ab6650433486dfb12eb3783c393a3e475"
+    },
+    "storybook": {
+      "url": "https://github.com/storybookjs/storybook.git",
+      "commit": "3e12dfc040f5780997ed2395b433785f7b4d161b"
+    },
+    "shadcn-ui": {
+      "url": "https://github.com/shadcn-ui/ui.git",
+      "commit": "cb2bcd88d93b2f9bddb030e9136f1f8773e7eac4"
     }
   }
 }

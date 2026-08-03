@@ -6,55 +6,99 @@ def resolve_skill_path(skill_item):
     source_type = skill_item.get("source", "local")
     name = skill_item.get("name")
     
-    if source_type == "local":
-        path_str = skill_item.get("path")
+    path_str = skill_item.get("path")
+    if path_str:
         path_obj = Path(path_str).expanduser()
-        if path_obj.is_absolute():
+        if path_obj.is_absolute() or str(path_str).startswith("~"):
             return path_obj
         return KIT_DIR / path_str
-    elif source_type == "github":
+
+    if source_type == "github":
         return CACHE_DIR / "fetched" / name
     return None
 
 def find_sub_skills(base_path):
     """
-    Finds all individual skill directories or skill files inside a skill package/repo.
+    Finds complete skill root directories.
+    When a skill directory is symlinked, its internal assets/, references/, scripts/, etc.
+    remain completely intact inside the skill folder.
     """
     if not base_path or not base_path.exists():
         return {}
 
     skills = {}
 
-    # Case 1: Root itself is a valid skill
+    # Case 1: Root itself is a complete skill with SKILL.md
     if (base_path / "SKILL.md").exists():
         skills[base_path.name] = base_path
         return skills
 
-    # Case 2: Standard subdirectories (skills/, agent-skills/)
-    search_dirs = []
-    if (base_path / "skills").exists():
-        search_dirs.append(base_path / "skills")
-    if (base_path / "agent-skills").exists():
-        search_dirs.append(base_path / "agent-skills")
-    
-    if not search_dirs:
-        search_dirs.append(base_path)
-
-    for s_dir in search_dirs:
-        for item in s_dir.rglob("*"):
+    # Case 2: ecc-pruned-skills (each subfolder is a complete skill folder)
+    if base_path.name == "ecc-pruned-skills":
+        for item in base_path.iterdir():
             if item.is_dir():
-                if (item / "SKILL.md").exists():
-                    skills[item.name] = item
-                elif not any(p.name in ("assets", "references", "scripts", ".git") for p in item.parents):
-                    # Check if directory contains markdown skill files
-                    md_files = [f for f in item.glob("*.md") if f.name not in ("README.md", "LICENSE.md", "CHANGELOG.md")]
-                    if md_files:
-                        skills[item.name] = item
+                skills[item.name] = item
+        return skills
+
+    # Case 3: Structure like prompt-architect (skills/<skill-name>)
+    if (base_path / "skills").exists():
+        skills_dir = base_path / "skills"
+        for item in skills_dir.iterdir():
+            if item.is_dir():
+                skills[item.name] = item
+        if skills:
+            return skills
+
+    # Case 4: Structure like mengto-skills (agent-skills/<category>/<skill-name>)
+    if (base_path / "agent-skills").exists():
+        ag_dir = base_path / "agent-skills"
+        for category in ag_dir.iterdir():
+            if category.is_dir():
+                for skill_folder in category.iterdir():
+                    if skill_folder.is_dir():
+                        skills[skill_folder.name] = skill_folder
+        if skills:
+            return skills
+
+    # Case 5: Direct skill root folders in base_path
+    for item in base_path.iterdir():
+        if item.is_dir() and not item.name.startswith("."):
+            if (item / "SKILL.md").exists() or any(f.suffix == ".md" for f in item.glob("*.md")):
+                skills[item.name] = item
 
     if not skills and base_path.exists():
         skills[base_path.name] = base_path
 
     return skills
+
+def find_pack_agents(base_path, fetched_name=None):
+    """
+    Returns list of agent .md files for a skill pack.
+    Priority: 1) pruned-agents dir, 2) base_path/agents/, 3) fetched/name/agents/
+    """
+    # 1. Pruned agents dir (created by prune_pack_agents_for_profile during sync)
+    if fetched_name:
+        pruned_dir = CACHE_DIR / f"{fetched_name}-pruned-agents"
+        if pruned_dir.exists():
+            found = list(pruned_dir.glob("*.md"))
+            if found:
+                return found
+
+    # 2. base_path/agents/ and fetched fallback
+    search_paths = [base_path]
+    if fetched_name:
+        fetched_path = CACHE_DIR / "fetched" / fetched_name
+        if fetched_path.exists() and fetched_path != base_path:
+            search_paths.append(fetched_path)
+
+    for path in search_paths:
+        agents_dir = path / "agents"
+        if agents_dir.exists() and agents_dir.is_dir():
+            found = list(agents_dir.glob("*.md"))
+            if found:
+                return found
+    return []
+
 
 def sync_active_skills(cwd=None):
     if cwd is None:
@@ -68,6 +112,13 @@ def sync_active_skills(cwd=None):
     local_enabled_optionals = local_state.get("enabled_optionals", [])
 
     results = []
+
+    # 0. Clean up stale agent symlinks from all global adapter agent dirs
+    for adapter in ALL_ADAPTERS:
+        ag_dir = adapter.ensure_agent_target_dir(is_local=False)
+        for item in list(ag_dir.glob("*.md")):
+            if item.is_symlink():
+                item.unlink()
 
     # 1. Core skills -> Always Global
     for item in manifest.get("core", []):
@@ -93,16 +144,25 @@ def sync_active_skills(cwd=None):
         is_global_active = (name in global_enabled_optionals) or (is_default and name not in state.get("disabled_optionals", []))
 
         sub_map = find_skills_map(name, path)
+        pack_agents = find_pack_agents(path, fetched_name=name)
 
         if is_local_active:
             for s_name, s_path in sub_map.items():
                 for adapter in ALL_ADAPTERS:
                     _, msg = adapter.link_skill(s_name, s_path, is_local=True, cwd=cwd)
                     results.append(msg)
+            for agent_file in pack_agents:
+                for adapter in ALL_ADAPTERS:
+                    _, msg = adapter.link_agent(agent_file.stem, agent_file, is_local=True, cwd=cwd)
+                    results.append(msg)
         elif is_global_active:
             for s_name, s_path in sub_map.items():
                 for adapter in ALL_ADAPTERS:
                     _, msg = adapter.link_skill(s_name, s_path, is_local=False)
+                    results.append(msg)
+            for agent_file in pack_agents:
+                for adapter in ALL_ADAPTERS:
+                    _, msg = adapter.link_agent(agent_file.stem, agent_file, is_local=False)
                     results.append(msg)
 
     # 3. Custom Subagents (agents/*.md) -> Always Global

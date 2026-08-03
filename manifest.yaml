@@ -142,7 +142,8 @@ optional:
   - name: "ecc-suite"
     description: "Everything Claude Code (스택 프로필 기반 맞춤형 스킬 팩)"
     source: "github"
-    url: "https://github.com/affableseapnk/everything-claude-code.git"
+    url: "https://github.com/affaan-m/everything-claude-code.git"
+    path: "~/.agent-skills/store/ecc-pruned-skills"
     auto_update: true
     default_enabled: true
 
@@ -150,6 +151,7 @@ optional:
     description: "MengTo Design & UI/UX 스킬 팩 (iOS, SwiftUI, React, Design System)"
     source: "github"
     url: "https://github.com/MengTo/Skills.git"
+    path: "~/.agent-skills/store/mengto-pruned-skills"
     auto_update: true
     default_enabled: true
 
@@ -157,6 +159,83 @@ optional:
     description: "프롬프트 아키텍팅 & 시스템 지침 설계 스킬 (필요 시 온디맨드 설치)"
     source: "github"
     url: "https://github.com/ckelsoe/prompt-architect.git"
+    auto_update: true
+    default_enabled: false
+
+  - name: "app-store-screenshots"
+    description: "App Store & Google Play 마케팅 스크린샷 디자인 스킬 팩"
+    source: "github"
+    url: "https://github.com/ParthJadhav/app-store-screenshots.git"
+    auto_update: true
+    default_enabled: false
+
+  - name: "spec-kit"
+    description: "GitHub SpecKit - Spec-Driven Development (SDD) 명세 기반 기획 및 개발 파이프라인 팩"
+    source: "github"
+    url: "https://github.com/github/spec-kit.git"
+    auto_update: true
+    default_enabled: false
+
+  - name: "promptfoo"
+    description: "Promptfoo - LLM 앱 보안 테스트 및 평가 프레임워크 팩"
+    source: "github"
+    url: "https://github.com/promptfoo/promptfoo.git"
+    auto_update: true
+    default_enabled: false
+
+  - name: "inspect-ai"
+    description: "Inspect AI - UK AISI의 LLM 평가 및 안전성 검증 프레임워크 팩"
+    source: "github"
+    url: "https://github.com/UKGovernmentBEIS/inspect_ai.git"
+    auto_update: true
+    default_enabled: false
+
+  - name: "screenshot-to-code"
+    description: "Screenshot to Code - 스크린샷/목업을 HTML, Tailwind, React 코드로 변환하는 스킬 팩"
+    source: "github"
+    url: "https://github.com/abi/screenshot-to-code.git"
+    auto_update: true
+    default_enabled: false
+
+  - name: "openui"
+    description: "W&B OpenUI - AI 기반 UI 컴포넌트 생성 및 에디터 팩"
+    source: "github"
+    url: "https://github.com/wandb/openui.git"
+    auto_update: true
+    default_enabled: false
+
+  - name: "storybook"
+    description: "Storybook - UI 컴포넌트 개발 및 문서화 워크숍 스킬 팩"
+    source: "github"
+    url: "https://github.com/storybookjs/storybook.git"
+    auto_update: true
+    default_enabled: false
+
+  - name: "shadcn-ui"
+    description: "shadcn/ui - Radix UI & Tailwind CSS 기반 재사용 가능한 UI 컴포넌트 팩"
+    source: "github"
+    url: "https://github.com/shadcn-ui/ui.git"
+    auto_update: true
+    default_enabled: false
+
+  - name: "coolify"
+    description: "Coolify - 오픈소스 셀프호스팅 및 배포 플랫폼"
+    source: "github"
+    url: "https://github.com/coolifyio/coolify.git"
+    auto_update: true
+    default_enabled: false
+
+  - name: "copilotkit"
+    description: "CopilotKit - 제품 내 AI 코파일럿 및 에이전트 UI 프레임워크"
+    source: "github"
+    url: "https://github.com/CopilotKit/CopilotKit.git"
+    auto_update: true
+    default_enabled: false
+
+  - name: "posthog"
+    description: "PostHog - 제품 분석, feature flags, session replay 플랫폼"
+    source: "github"
+    url: "https://github.com/PostHog/posthog.git"
     auto_update: true
     default_enabled: false
 
