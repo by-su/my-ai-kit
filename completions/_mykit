@@ -13,6 +13,7 @@ _mykit() {
             local -a commands
             commands=(
                 'list:Show status of MCPs, custom agents, core and optional skills'
+                'setup:Choose or create profile, global skills, pruning, and MCPs'
                 'stats:View system analytics, token savings, and adapter connectivity'
                 'env:Interactive setup wizard for MCP API keys and secrets'
                 'stack:View or switch stack profiles (personal, work, full)'

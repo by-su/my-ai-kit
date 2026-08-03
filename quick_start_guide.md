@@ -19,6 +19,7 @@ source ~/.zshrc
 ### ⚙️ `./bootstrap.sh`가 내부에서 처리하는 작업
 * **`bin/mykit` 실행 권한 자동 부여**: `chmod +x` 실행
 * **터미널 `PATH` 자동 등록**: `~/.zshrc` 및 `~/.bashrc`에 `mykit` 실행 경로 자동 연결
+* **초기 선택 마법사 실행**: 터미널에서 직접 실행하면 프로필 선택 또는 custom profile 생성, pruning 언어/스택, 전역 Optional 스킬, 선택한 팩의 pruning 여부, MCP 선택
 * **활성 GitHub 스킬 lazy 다운로드**: 기본 활성 스킬만 다운로드하고 비활성 Optional은 필요할 때 가져옴
 * **전체 에이전트 동기화 (`mykit sync`)**:
   - 6개 활성 MCP 서버 4개 에이전트에 자동 주입
@@ -33,6 +34,7 @@ source ~/.zshrc
 | 명령어 | 설명 | 비고 |
 | :--- | :--- | :--- |
 | `mykit list` | 현재 스택 프로필, MCP, 서브 에이전트, 스킬 목록 상태 조회 | 현황 확인 |
+| `mykit setup` | 프로필 선택 또는 custom profile 생성, pruning 언어/스택, 전역 Optional 스킬, 선택한 팩의 pruning 여부, MCP 선택 | 초기 설정 |
 | `mykit sync` | 활성 스킬만 lazy fetch 후 전체 에이전트(Claude, Antigravity, Codex) 동기화 | 핵심 배포 |
 | `mykit sync --all` | 비활성 Optional까지 모두 fetch 후 동기화 | 전체 사전 다운로드 |
 | `mykit prefetch <skill>` | 스킬을 활성화하지 않고 미리 다운로드 | 선택 다운로드 |

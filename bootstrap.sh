@@ -42,8 +42,12 @@ cp "$SCRIPT_DIR/AGENTS.md" ~/.codex/AGENTS.md
 
 echo "✓ Global Karpathy guidelines deployed to ~/.claude, ~/.gemini, ~/.codex"
 
-# Run initial sync
-"$MYKIT_BIN" sync
+# Run initial setup when attached to a terminal; keep automation non-interactive.
+if [ -t 0 ]; then
+    "$MYKIT_BIN" setup
+else
+    "$MYKIT_BIN" sync
+fi
 
 echo ""
 echo "🎉 Setup complete! Run 'source ~/.zshrc' to use 'mykit' anywhere."

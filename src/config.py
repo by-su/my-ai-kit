@@ -97,6 +97,7 @@ def get_active_profile():
 def set_active_profile(profile_name):
     state = load_state()
     state["active_profile"] = profile_name
+    state.pop("profile_keywords", None)
     save_state(state)
 
 def load_local_state(cwd=None):

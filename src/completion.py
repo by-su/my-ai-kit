@@ -18,6 +18,7 @@ _mykit() {
             local -a commands
             commands=(
                 'list:Show status of MCPs, custom agents, core and optional skills'
+                'setup:Choose or create profile, global skills, pruning, and MCPs'
                 'stats:View system analytics, token savings, and adapter connectivity'
                 'env:Interactive setup wizard for MCP API keys and secrets'
                 'stack:View or switch stack profiles (personal, work, full)'
@@ -101,7 +102,7 @@ _mykit_completions() {
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-    opts="list stats env stack mcp install remove sync prefetch reset update lint dedupe doctor completion"
+    opts="list setup stats env stack mcp install remove sync prefetch reset update lint dedupe doctor completion"
 
     if [ $COMP_CWORD -eq 1 ]; then
         COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )

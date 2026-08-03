@@ -1,6 +1,6 @@
 import shutil
 from pathlib import Path
-from src.config import load_manifest, KIT_DIR
+from src.config import load_manifest, load_state, KIT_DIR
 
 # Universal core developer utilities (keyword-based, used for SKILL pruning)
 UNIVERSAL_UTILITIES = {
@@ -38,6 +38,10 @@ UNIVERSAL_AGENTS = {
 
 
 def get_profile_keywords(profile_name):
+    state = load_state()
+    if "profile_keywords" in state:
+        return state.get("profile_keywords", [])
+
     manifest = load_manifest()
     profiles = manifest.get("profiles", {})
     prof = profiles.get(profile_name, profiles.get("personal", {}))

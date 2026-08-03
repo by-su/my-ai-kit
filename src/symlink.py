@@ -2,9 +2,22 @@ from pathlib import Path
 from adapters import ALL_ADAPTERS
 from src.config import KIT_DIR, CACHE_DIR, load_manifest, load_state, load_local_state
 
+PRUNABLE_PACKS = {"ecc-suite", "mengto-skills"}
+
+
+def get_enabled_pruning_packs(state=None):
+    if state is None:
+        state = load_state()
+    return set(state.get("enabled_pruning_packs", list(PRUNABLE_PACKS)))
+
 def resolve_skill_path(skill_item):
     source_type = skill_item.get("source", "local")
     name = skill_item.get("name")
+
+    if source_type == "github" and name in PRUNABLE_PACKS:
+        enabled_pruning = get_enabled_pruning_packs()
+        if name not in enabled_pruning:
+            return CACHE_DIR / "fetched" / name
     
     path_str = skill_item.get("path")
     if path_str:
@@ -77,7 +90,7 @@ def find_pack_agents(base_path, fetched_name=None):
     Priority: 1) pruned-agents dir, 2) base_path/agents/, 3) fetched/name/agents/
     """
     # 1. Pruned agents dir (created by prune_pack_agents_for_profile during sync)
-    if fetched_name:
+    if fetched_name and fetched_name in get_enabled_pruning_packs():
         pruned_dir = CACHE_DIR / f"{fetched_name}-pruned-agents"
         if pruned_dir.exists():
             found = list(pruned_dir.glob("*.md"))
