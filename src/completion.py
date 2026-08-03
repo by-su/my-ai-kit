@@ -21,7 +21,7 @@ _mykit() {
                 'setup:Choose or create profile, global skills, pruning, and MCPs'
                 'stats:View system analytics, token savings, and adapter connectivity'
                 'env:Interactive setup wizard for MCP API keys and secrets'
-                'stack:View or switch stack profiles (personal, work, full)'
+                'stack:View, switch, or edit stack profiles'
                 'mcp:View or toggle MCP servers (enable, disable)'
                 'install:Install optional skill to pwd (or --global)'
                 'remove:Remove optional skill from pwd (or --global)'
@@ -41,12 +41,8 @@ _mykit() {
                 stack)
                     if [[ $#words -eq 3 ]]; then
                         local -a stack_cmds
-                        stack_cmds=('use' 'set' 'list')
+                        stack_cmds=('use' 'set' 'list' 'edit')
                         _describe -t stack_cmds 'stack command' stack_cmds
-                    elif [[ $#words -eq 4 ]]; then
-                        local -a profiles
-                        profiles=('personal' 'work' 'full')
-                        _describe -t profiles 'profile' profiles
                     fi
                     ;;
                 mcp)
@@ -111,7 +107,7 @@ _mykit_completions() {
 
     case "${prev}" in
         stack)
-            COMPREPLY=( $(compgen -W "use set list personal work full" -- ${cur}) )
+            COMPREPLY=( $(compgen -W "use set list edit" -- ${cur}) )
             return 0
             ;;
         mcp)

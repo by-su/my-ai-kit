@@ -15,7 +15,7 @@ _mykit_completions() {
 
     case "${prev}" in
         stack)
-            COMPREPLY=( $(compgen -W "use set list personal work full" -- ${cur}) )
+            COMPREPLY=( $(compgen -W "use set list edit" -- ${cur}) )
             return 0
             ;;
         mcp)

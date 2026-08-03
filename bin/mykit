@@ -12,7 +12,7 @@ sys.path.insert(0, str(KIT_DIR))
 
 from src.config import (
     CACHE_DIR, STATE_FILE, load_manifest, load_state, save_state, load_lockfile,
-    load_local_state, save_local_state, get_active_profile, set_active_profile
+    load_local_state, save_local_state, get_active_profile
 )
 from src.symlink import (
     PRUNABLE_PACKS,
@@ -50,26 +50,34 @@ def prompt_setup_selection(title, items, default_selected, single=False):
     rows = []
     for name in names:
         desc = ""
+        meta = {}
         if isinstance(items, dict):
             conf = items[name] or {}
             desc = conf.get("description", "")
-        rows.append((name, desc))
+            meta = {"active": conf.get("active", False)}
+        rows.append((name, desc, meta))
 
     result = run_multiselect(title, rows, default_selected, single=single)
     if result is not None:
         return result
 
     print(f"\n\033[1;36m{title}\033[0m")
-    for idx, (name, desc) in enumerate(rows, 1):
+    for idx, row in enumerate(rows, 1):
+        name, desc, meta = row
         marker = "x" if name in default_selected else " "
-        suffix = f" - {desc}" if desc else ""
-        print(f"  {idx:2d}. [{marker}] {name}{suffix}")
+        active = " \033[1;32m● active\033[0m" if meta.get("active") else ""
+        print(f"  {idx:2d}. [{marker}] {name}{active}")
+        for detail in str(desc).splitlines():
+            print(f"       {detail}")
 
     if single:
         print("Enter one number/name, 'b' to go back, or 'q' to cancel. Press Enter to keep default.")
     else:
         print("Enter numbers/names separated by commas, 'all', 'none', 'b' to go back, or 'q' to cancel. Press Enter to keep defaults.")
-    raw = input("> ")
+    try:
+        raw = input("> ")
+    except EOFError:
+        return set(default_selected), "cancel"
     selected, action, warnings = parse_setup_selection(raw, names, default_selected)
     if single and selected:
         selected = {next(name for name in names if name in selected)}
@@ -93,8 +101,89 @@ def normalize_custom_profile_name(raw):
 def prompt_custom_profile_name(default_name):
     print("\n\033[1;36mCustom profile name\033[0m")
     print(f"Enter a name for this profile. Press Enter to use '{default_name}'.")
-    raw = input("> ")
+    try:
+        raw = input("> ")
+    except EOFError:
+        return normalize_custom_profile_name(default_name)
     return normalize_custom_profile_name(raw or default_name)
+
+def print_profile_keywords(label, keywords):
+    print(f"\n\033[1;36m{label}\033[0m")
+    if not keywords:
+        print("  (no languages/stacks selected)")
+    elif "*" in keywords:
+        print("  all stacks (*)")
+    else:
+        width = shutil.get_terminal_size((88, 20)).columns
+        line = "  "
+        for keyword in sorted(keywords):
+            part = keyword if line == "  " else f", {keyword}"
+            if str_display_width(line + part) > max(32, width - 2):
+                print(line)
+                line = f"  {keyword}"
+            else:
+                line += part
+        print(line)
+
+def print_selected_profile_details(profile_name, description, keywords):
+    print(f"\n\033[1;36mSelected profile: {profile_name}\033[0m")
+    print_wrapped_field("Description", description or "No description")
+    print_wrapped_field("Stacks", format_stack_summary(keywords))
+
+def print_wrapped_field(label, value):
+    width = shutil.get_terminal_size((88, 20)).columns
+    prefix = f"  {label}: "
+    continuation = " " * str_display_width(prefix)
+    line = prefix
+    for word in str(value).split(" "):
+        if not word:
+            continue
+        part = word if line == prefix else f" {word}"
+        if str_display_width(line + part) > max(40, width - 2):
+            print(line)
+            line = continuation + word
+        else:
+            line += part
+    print(line)
+
+def format_stack_summary(keywords):
+    if not keywords:
+        return "no languages/stacks selected"
+    if "*" in keywords:
+        return "all stacks (*)"
+    return ", ".join(sorted(keywords))
+
+def format_profile_details(description, keywords):
+    description = description or "No description"
+    return f"Description: {description}\nStacks: {format_stack_summary(keywords)}"
+
+def get_custom_profiles(state):
+    custom_profiles = dict(state.get("custom_profiles", {}))
+    active_profile = state.get("active_profile", "")
+    if active_profile.startswith("custom:"):
+        name = active_profile.split(":", 1)[1] or state.get("custom_profile_name", "custom")
+        if name not in custom_profiles:
+            custom_profiles[name] = {
+                "description": f"custom profile '{name}'",
+                "include": state.get("profile_keywords", []),
+            }
+    return custom_profiles
+
+def save_custom_profile(state, name, keywords, description=None):
+    custom_profiles = get_custom_profiles(state)
+    custom_profiles[name] = {
+        "description": description or f"custom profile '{name}'",
+        "include": sorted(keywords),
+    }
+    state["custom_profiles"] = custom_profiles
+    state["active_profile"] = f"custom:{name}"
+    state["custom_profile_name"] = name
+    state["profile_keywords"] = sorted(keywords)
+
+def display_profile_name(profile_name):
+    if profile_name.startswith("custom:"):
+        return profile_name.split(":", 1)[1]
+    return profile_name
 
 def str_display_width(s):
     clean = re.sub(r'\033\[[0-9;]*m', '', str(s))
@@ -381,25 +470,28 @@ def cmd_mcp(args):
 def cmd_setup():
     manifest = load_manifest()
     mcps_all = manifest.get("global", {}).get("mcp_servers", {})
-    profiles = manifest.get("profiles", {})
-    profile_items = {"custom": {"description": "새 custom profile 생성"}}
-    for name, info in profiles.items():
-        profile_items[name] = {"description": info.get("description", "")}
     optionals = manifest.get("optional", [])
     optionals_by_name = {item.get("name"): item for item in optionals}
 
     state = load_state()
+    custom_profiles = get_custom_profiles(state)
+    profile_items = {"add": {"description": "새 profile 생성"}}
+    for name, info in custom_profiles.items():
+        profile_items[name] = {"description": format_profile_details(info.get("description", ""), info.get("include", []))}
     profile_keywords = get_setup_profile_keywords(manifest)
     has_existing_profile = STATE_FILE.exists() and bool(state.get("active_profile"))
-    current_profile = state.get("active_profile", get_active_profile()) if has_existing_profile else "custom"
+    current_profile = state.get("active_profile", get_active_profile()) if has_existing_profile else "add"
     selected_profile = current_profile
-    custom_profile_name = state.get("custom_profile_name", "custom")
+    custom_profile_name = state.get("custom_profile_name", "default")
     if current_profile.startswith("custom:"):
         custom_profile_name = current_profile.split(":", 1)[1] or custom_profile_name
-        selected_profile = "custom"
+        selected_profile = custom_profile_name
     elif current_profile not in profile_items:
-        selected_profile = "custom"
-    default_profile_keywords = set(state.get("profile_keywords", []))
+        selected_profile = "add"
+    if selected_profile in custom_profiles:
+        default_profile_keywords = set(custom_profiles[selected_profile].get("include", []))
+    else:
+        default_profile_keywords = set(state.get("profile_keywords", []))
 
     current_enabled_mcps = set(state.get("enabled_mcps", []))
     current_disabled_mcps = set(state.get("disabled_mcps", []))
@@ -421,9 +513,14 @@ def cmd_setup():
         "skills": set(default_skills),
         "pruning_packs": set(get_enabled_pruning_packs(state)),
     }
-    step_keys = ["profile", "profile_keywords", "skills", "pruning_packs", "mcps"]
+    step_keys = ["profile_keywords", "skills", "pruning_packs", "mcps"]
+    if custom_profiles:
+        step_keys.insert(0, "profile")
 
     print("\033[1;36m--- mykit initial setup ---\033[0m")
+    if not custom_profiles:
+        print("No stack profile found. Create one to use as your default profile.")
+        custom_profile_name = prompt_custom_profile_name(custom_profile_name)
     idx = 0
     while idx < len(step_keys):
         key = step_keys[idx]
@@ -431,10 +528,6 @@ def cmd_setup():
             title = "Profile"
             items = profile_items
         elif key == "profile_keywords":
-            if selected_profile != "custom":
-                selections["profile_keywords"] = set()
-                idx += 1
-                continue
             title = "Languages and stacks for pruning"
             items = profile_keywords
         elif key == "skills":
@@ -464,8 +557,12 @@ def cmd_setup():
             return
         if key == "profile":
             selected_profile = next(iter(selected), selected_profile)
-            if selected_profile == "custom":
+            if selected_profile == "add":
                 custom_profile_name = prompt_custom_profile_name(custom_profile_name)
+                selections["profile_keywords"] = set()
+            elif selected_profile in custom_profiles:
+                custom_profile_name = selected_profile
+                selections["profile_keywords"] = set(custom_profiles[selected_profile].get("include", []))
         else:
             selections[key] = selected
         if action == "back":
@@ -473,14 +570,8 @@ def cmd_setup():
         else:
             idx += 1
 
-    if selected_profile == "custom":
-        state["active_profile"] = f"custom:{custom_profile_name}"
-        state["custom_profile_name"] = custom_profile_name
-        state["profile_keywords"] = sorted(selections["profile_keywords"])
-    else:
-        state["active_profile"] = selected_profile
-        state.pop("custom_profile_name", None)
-        state.pop("profile_keywords", None)
+    if selected_profile == "add" or selected_profile in custom_profiles:
+        save_custom_profile(state, custom_profile_name, selections["profile_keywords"])
     state["enabled_pruning_packs"] = sorted(selections["pruning_packs"])
     state["enabled_mcps"] = sorted(selections["mcps"])
     state["disabled_mcps"] = sorted(set(mcps_all.keys()) - selections["mcps"])
@@ -494,28 +585,115 @@ def cmd_setup():
 def cmd_stack(args):
     manifest = load_manifest()
     profiles = manifest.get("profiles", {})
+    state = load_state()
+    custom_profiles = get_custom_profiles(state)
     active_profile = get_active_profile()
 
     if not args or args[0] in ("list", "status"):
-        print(f"\033[1;36m--- Active Stack Profile: {active_profile} ---\033[0m\n")
-        print("Available Profiles:")
-        for name, info in profiles.items():
-            current = " \033[1;32m(active)\033[0m" if name == active_profile else ""
-            desc = info.get("description", "")
-            print(f"  • \033[1;34m{name}\033[0m{current}: {desc}")
-        print("\nTo switch profile: \033[1mmykit stack use <personal|work|full>\033[0m")
+        print(f"\033[1;36m--- Active Stack Profile: {display_profile_name(active_profile)} ---\033[0m\n")
+        print("Profiles:")
+        if custom_profiles:
+            for name, info in custom_profiles.items():
+                profile_id = f"custom:{name}"
+                current = " \033[1;32m(active)\033[0m" if profile_id == active_profile else ""
+                desc = info.get("description", "")
+                print(f"  • \033[1;34m{name}\033[0m{current}: {desc}")
+                print_wrapped_field("Stacks", format_stack_summary(info.get("include", [])))
+        else:
+            print("  (none - run \033[1mmykit stack edit\033[0m or \033[1mmykit setup\033[0m to create one)")
+        print("\nTo switch profile: \033[1mmykit stack use <profile-name>\033[0m")
+        print("To edit profile: \033[1mmykit stack edit\033[0m")
     elif args[0] in ("use", "set"):
         if len(args) < 2:
             print("Usage: mykit stack use <profile_name>")
             sys.exit(1)
         target_profile = args[1]
-        if target_profile not in profiles:
-            print(f"\033[1;31mError:\033[0m Profile '{target_profile}' not found in manifest.yaml")
-            print(f"Available profiles: {', '.join(profiles.keys())}")
+        if target_profile in custom_profiles:
+            save_custom_profile(
+                state,
+                target_profile,
+                custom_profiles[target_profile].get("include", []),
+                custom_profiles[target_profile].get("description", ""),
+            )
+            save_state(state)
+            target_profile = f"custom:{target_profile}"
+        elif target_profile in profiles:
+            save_custom_profile(
+                state,
+                target_profile,
+                profiles[target_profile].get("include", []),
+                profiles[target_profile].get("description", ""),
+            )
+            save_state(state)
+            target_profile = f"custom:{target_profile}"
+        else:
+            print(f"\033[1;31mError:\033[0m Profile '{target_profile}' not found")
+            available = list(custom_profiles.keys())
+            if profiles:
+                available += [f"{name} (template)" for name in profiles.keys()]
+            print(f"Available profiles: {', '.join(available)}")
             sys.exit(1)
 
-        set_active_profile(target_profile)
-        print(f"✅ Switched active stack profile to '\033[1;32m{target_profile}\033[0m'")
+        print(f"✅ Switched active stack profile to '\033[1;32m{display_profile_name(target_profile)}\033[0m'")
+        cmd_sync()
+    elif args[0] in ("edit", "customize"):
+        current_profile = state.get("active_profile", active_profile)
+        custom_profile_name = state.get("custom_profile_name", "default")
+        selected_profile = "add"
+        if current_profile.startswith("custom:"):
+            custom_profile_name = current_profile.split(":", 1)[1] or custom_profile_name
+            selected_profile = custom_profile_name
+
+        profile_items = {
+            "add": {
+                "description": "Create a new profile",
+                "active": False,
+            },
+        }
+        for name, info in custom_profiles.items():
+            profile_items[name] = {
+                "description": format_profile_details(info.get("description", ""), info.get("include", [])),
+                "active": f"custom:{name}" == current_profile,
+            }
+
+        selected, action = prompt_setup_selection(
+            "Profile to edit",
+            profile_items,
+            {selected_profile},
+            single=True,
+        )
+        if action == "cancel":
+            print("\nProfile edit cancelled. No changes saved.")
+            return
+
+        selected_profile = next(iter(selected), selected_profile)
+        if selected_profile == "add":
+            profile_name = custom_profile_name
+            profile_description = "New custom profile"
+            default_keywords = set()
+        elif selected_profile in custom_profiles:
+            profile_name = selected_profile
+            profile_description = custom_profiles[selected_profile].get("description", "")
+            default_keywords = set(custom_profiles[selected_profile].get("include", []))
+        else:
+            profile_name = custom_profile_name
+            profile_description = "New custom profile"
+            default_keywords = set()
+
+        print_selected_profile_details(selected_profile, profile_description, default_keywords)
+        profile_name = prompt_custom_profile_name(profile_name)
+        selected, action = prompt_setup_selection(
+            "Languages and stacks for pruning",
+            get_setup_profile_keywords(manifest),
+            default_keywords,
+        )
+        if action == "cancel":
+            print("\nProfile edit cancelled. No changes saved.")
+            return
+
+        save_custom_profile(state, profile_name, selected)
+        save_state(state)
+        print(f"✓ Saved custom stack profile '\033[1;32m{profile_name}\033[0m'")
         cmd_sync()
 
 def cmd_enable(skill_name, is_global=False):

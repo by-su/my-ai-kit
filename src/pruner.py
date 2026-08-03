@@ -39,7 +39,12 @@ UNIVERSAL_AGENTS = {
 
 def get_profile_keywords(profile_name):
     state = load_state()
-    if "profile_keywords" in state:
+    if profile_name.startswith("custom:"):
+        custom_name = profile_name.split(":", 1)[1]
+        custom_profiles = state.get("custom_profiles", {})
+        if custom_name in custom_profiles:
+            return custom_profiles[custom_name].get("include", [])
+    if profile_name.startswith("custom:") and "profile_keywords" in state:
         return state.get("profile_keywords", [])
 
     manifest = load_manifest()

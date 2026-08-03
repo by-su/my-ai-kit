@@ -19,7 +19,7 @@ source ~/.zshrc
 ### ⚙️ `./bootstrap.sh`가 내부에서 처리하는 작업
 * **`bin/mykit` 실행 권한 자동 부여**: `chmod +x` 실행
 * **터미널 `PATH` 자동 등록**: `~/.zshrc` 및 `~/.bashrc`에 `mykit` 실행 경로 자동 연결
-* **초기 선택 마법사 실행**: 터미널에서 직접 실행하면 프로필 선택 또는 custom profile 생성, pruning 언어/스택, 전역 Optional 스킬, 선택한 팩의 pruning 여부, MCP 선택
+* **초기 선택 마법사 실행**: 터미널에서 직접 실행하면 profile 생성/선택, pruning 언어/스택, 전역 Optional 스킬, 선택한 팩의 pruning 여부, MCP 선택
 * **활성 GitHub 스킬 lazy 다운로드**: 기본 활성 스킬만 다운로드하고 비활성 Optional은 필요할 때 가져옴
 * **재현 가능한 기본 설치**: 외부 GitHub 스킬은 기본적으로 lockfile commit을 사용하고 자동 업데이트하지 않음
 * **전체 에이전트 동기화 (`mykit sync`)**:
@@ -35,14 +35,14 @@ source ~/.zshrc
 | 명령어 | 설명 | 비고 |
 | :--- | :--- | :--- |
 | `mykit list` | 현재 스택 프로필, MCP, 서브 에이전트, 스킬 목록 상태 조회 | 현황 확인 |
-| `mykit setup` | 프로필 선택 또는 custom profile 생성, pruning 언어/스택, 전역 Optional 스킬, 선택한 팩의 pruning 여부, MCP 선택 | 초기 설정 |
+| `mykit setup` | profile 생성/선택, pruning 언어/스택, 전역 Optional 스킬, 선택한 팩의 pruning 여부, MCP 선택 | 초기 설정 |
 | `mykit sync` | 활성 스킬만 lazy fetch 후 전체 에이전트(Claude, Antigravity, Codex) 동기화 | 핵심 배포 |
 | `mykit sync --all` | 비활성 Optional까지 모두 fetch 후 동기화 | 전체 사전 다운로드 |
 | `mykit prefetch <skill>` | 스킬을 활성화하지 않고 미리 다운로드 | 선택 다운로드 |
 | `mykit reset` | 찌꺼기 심볼릭 링크 및 구버전 설정 100% 클린 리셋 | 초기화 |
 | `mykit stats` | 시스템 통계 대시보드 (스킬 감축률, 토큰 절약량, 에이전트 연결 현황) | 시각화 |
 | `mykit env setup` | MCP API 키 및 시크릿 인터랙티브 대화형 등록 마법사 | 키 세팅 |
-| `mykit stack` | 개발 스택 프로필 조회 및 전환 (`mykit stack use personal \| work \| full`) | 스택 스위칭 |
+| `mykit stack` | 개발 스택 프로필 조회, 전환, 수정 (`mykit stack use <profile>`, `mykit stack edit`) | 스택 스위칭 |
 | `mykit mcp` | MCP 서버 켜기/끄기 토글 (`mykit mcp enable \| disable <mcp-name>`) | MCP 관리 |
 | `mykit doctor` | MCP 헬스체크, 시크릿 키 검증, 에이전트 연결 상태 점검 | 진단 |
 | `mykit completion install` | Zsh / Bash 터미널 자동 완성(Tab Completion) 1초 등록 | 편의 기능 |

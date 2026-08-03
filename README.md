@@ -12,14 +12,14 @@
 | 명령어 | 설명 |
 | :--- | :--- |
 | `mykit list` | 활성화된 스택 프로필, MCP 서버, 커스텀 서브 에이전트(`agents/*.md`), Core 및 Local 스킬 조회 |
-| `mykit setup` | 초기 셋업 마법사로 프로필 선택 또는 custom profile 생성, pruning 언어/스택, 전역 Optional 스킬, 선택한 팩의 pruning 여부, MCP 선택 |
+| `mykit setup` | 초기 셋업 마법사로 profile 생성/선택, pruning 언어/스택, 전역 Optional 스킬, 선택한 팩의 pruning 여부, MCP 선택 |
 | `mykit install <skill-name>` | **현재 작업 중인 프로젝트 디렉터리(`pwd`)** 내부로 Optional 스킬 설치 및 **자동 중복 스캔 훅(Auto-Dedupe Hook) 연동** |
 | `mykit install <skill-name> --global` | Optional 스킬을 전역(Global) 스코프로 설치 및 **자동 중복 스캔 훅 연동** |
 | `mykit remove <skill-name>` | 현재 작업 중인 프로젝트 디렉터리(`pwd`)에서 Optional 스킬 제거 |
 | `mykit stats` | 시스템 전체 통계 대시보드 (스킬 감축률, 토큰 절약량, 에이전트 연결 현황) |
 | `mykit env setup` | MCP API 키 및 시크릿 인터랙티브 자동 대화형 등록 마법사 |
 | `mykit mcp` | 등록된 MCP 서버 활성화 상태 조회 및 토글 (`mykit mcp enable \| disable <mcp-name>`) |
-| `mykit stack` | 현재 스택 프로필 조회 및 전환 (`mykit stack use personal \| work \| full`) |
+| `mykit stack` | 현재 스택 프로필 조회, 전환, 수정 (`mykit stack use <profile>`, `mykit stack edit`) |
 | `mykit sync` | 활성 스킬만 lazy fetch한 뒤 스택 프로필, 안전 명령어, MCP, 서브 에이전트 동기화 |
 | `mykit sync --all` | 비활성 Optional까지 포함해 모든 GitHub 스킬을 명시적으로 fetch 후 동기화 |
 | `mykit prefetch <skill-name\|--all>` | Optional 스킬을 활성화하지 않고 미리 다운로드 |
@@ -101,6 +101,13 @@ mykit mcp disable mysql
 
 회사 PC와 개인 PC의 개발 스택이 다르거나 270+ 스킬 전체를 전부 로드해야 할 때 프로필 한 줄로 유연하게 전환할 수 있습니다.
 
+```bash
+mykit stack
+mykit stack edit
+```
+
+`mykit stack edit`는 새 profile을 만들거나 기존 profile의 pruning 언어/스택을 수정합니다. 처음 setup에서는 profile을 반드시 하나 생성하고 그 profile이 기본 active profile이 됩니다.
+
 ---
 
 ## 🚀 워크플로우 가이드
@@ -127,7 +134,7 @@ mykit install prompt-architect
 
 기본 bootstrap/sync는 `default_enabled: true`이거나 직접 설치한 활성 스킬만 다운로드합니다. 비활성 Optional 스킬까지 모두 받아두려면 `mykit sync --all` 또는 `mykit prefetch --all`을 명시적으로 실행하세요.
 
-`./bootstrap.sh`를 터미널에서 직접 실행하면 `mykit setup`이 열려 프로필 선택 또는 custom profile 생성, pruning 언어/스택, 전역 Optional 스킬, 선택한 팩의 pruning 여부, MCP 서버를 선택합니다. custom profile을 고른 경우 첫 setup은 아무 언어도 미리 선택하지 않습니다. Pruning 질문은 `ecc-suite` 또는 `mengto-skills`를 전역 Optional로 선택했을 때만 표시됩니다. `↑/↓`로 이동하고 Space 또는 클릭으로 선택을 토글한 뒤 Enter로 다음 단계로 이동합니다. `b`로 이전 단계로 돌아가고, `q`/Esc로 취소합니다. 파이프/CI처럼 비대화형으로 실행될 때는 기존처럼 기본값으로 `mykit sync`만 실행합니다.
+`./bootstrap.sh`를 터미널에서 직접 실행하면 `mykit setup`이 열려 profile 생성/선택, pruning 언어/스택, 전역 Optional 스킬, 선택한 팩의 pruning 여부, MCP 서버를 선택합니다. 첫 setup은 profile을 반드시 하나 생성하고, 아무 언어도 미리 선택하지 않습니다. Pruning 질문은 `ecc-suite` 또는 `mengto-skills`를 전역 Optional로 선택했을 때만 표시됩니다. `↑/↓`로 이동하고 Space 또는 클릭으로 선택을 토글한 뒤 Enter로 다음 단계로 이동합니다. `b`로 이전 단계로 돌아가고, `q`/Esc로 취소합니다. 파이프/CI처럼 비대화형으로 실행될 때는 기존처럼 기본값으로 `mykit sync`만 실행합니다.
 
 Bootstrap 안전 옵션:
 
