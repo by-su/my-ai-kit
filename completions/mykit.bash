@@ -27,7 +27,7 @@ _mykit_completions() {
             return 0
             ;;
         install|remove|prefetch)
-            COMPREPLY=( $(compgen -W "db-helper ecc-suite mengto-skills prompt-architect --global --all" -- ${cur}) )
+            COMPREPLY=( $(compgen -W "db-helper ecc-suite mengto-skills prompt-architect app-store-screenshots spec-kit --global --all" -- ${cur}) )
             return 0
             ;;
         sync|update)
