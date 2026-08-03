@@ -1,5 +1,29 @@
 version: "1.0"
 
+# 안전한 명령어 자동 승인 목록 (매번 허락 묻지 않음!)
+auto_approve_commands:
+  - "git"
+  - "ls"
+  - "cat"
+  - "head"
+  - "tail"
+  - "grep"
+  - "rg"
+  - "find"
+  - "pwd"
+  - "echo"
+  - "python3"
+  - "python"
+  - "node"
+  - "npx"
+  - "npm test"
+  - "npm run build"
+  - "npm run dev"
+  - "yarn test"
+  - "pnpm test"
+  - "pytest"
+  - "mykit"
+
 # 에이전트 공통 설정 / MCP 관리
 global:
   mcp_servers:
@@ -8,6 +32,7 @@ global:
       args:
         - "-y"
         - "@context7/mcp-server"
+      enabled: true
 
     github:
       command: "npx"
@@ -16,6 +41,7 @@ global:
         - "@modelcontextprotocol/server-github"
       env:
         GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN}"
+      enabled: true
 
     google-docs:
       command: "npx"
@@ -25,12 +51,14 @@ global:
       env:
         GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID}"
         GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET}"
+      enabled: true
 
     google-slides:
       command: "npx"
       args:
         - "-y"
         - "@a-bonus/google-slides-mcp"
+      enabled: true
 
     mysql:
       command: "npx"
@@ -42,18 +70,21 @@ global:
         MYSQL_USER: "${MYSQL_USER}"
         MYSQL_PASSWORD: "${MYSQL_PASSWORD}"
         MYSQL_DATABASE: "${MYSQL_DATABASE}"
+      enabled: false
 
     playwright:
       command: "npx"
       args:
         - "-y"
         - "@modelcontextprotocol/server-playwright"
+      enabled: false
 
     memory:
       command: "npx"
       args:
         - "-y"
         - "@modelcontextprotocol/server-memory"
+      enabled: true
 
     brave-search:
       command: "npx"
@@ -62,6 +93,43 @@ global:
         - "@modelcontextprotocol/server-brave-search"
       env:
         BRAVE_API_KEY: "${BRAVE_API_KEY}"
+      enabled: true
+
+# 스택 프로필 정의 (개인용 / 회사용 / 전체 모드)
+profiles:
+  personal:
+    description: "개인 개발 스택 (TS/JS, React, Next, Nest, Python, FastAPI, Java, Kotlin, SpringBoot, Prisma, MySQL)"
+    include:
+      - typescript
+      - javascript
+      - react
+      - react-native
+      - next
+      - nest
+      - python
+      - fastapi
+      - java
+      - kotlin
+      - springboot
+      - jpa
+      - prisma
+      - mysql
+
+  work:
+    description: "회사 개발 스택 (커스텀 설정 가능)"
+    include:
+      - typescript
+      - javascript
+      - react
+      - node
+      - docker
+      - aws
+      - postgres
+
+  full:
+    description: "전체 스킬 모드 (필터링 없이 270+ 스킬 모두 로드)"
+    include:
+      - "*"
 
 # 항상 자동 설치되는 Core 스크립트 & 스킬
 core:
@@ -78,9 +146,9 @@ optional:
     default_enabled: true
 
   - name: "ecc-suite"
-    description: "Everything Claude Code (ECC v2.0.0) 100+ 종합 스킬 팩"
+    description: "Everything Claude Code (스택 프로필 기반 맞춤형 스킬 팩)"
     source: "local"
-    path: "~/.claude/plugins/cache/ecc/ecc/2.0.0/skills"
+    path: "~/.agent-skills/store/ecc-pruned-skills"
     default_enabled: true
 
   - name: "mengto-skills"

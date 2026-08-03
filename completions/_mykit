@@ -1,0 +1,78 @@
+#compdef mykit
+
+_mykit() {
+    local curcontext="$curcontext" state line
+    typeset -A opt_args
+
+    _arguments -C \
+        '1: :->command' \
+        '*: :->args'
+
+    case $state in
+        command)
+            local -a commands
+            commands=(
+                'list:Show status of MCPs, custom agents, core and optional skills'
+                'stack:View or switch stack profiles (personal, work, full)'
+                'mcp:View or toggle MCP servers (enable, disable)'
+                'install:Install optional skill to pwd (or --global)'
+                'remove:Remove optional skill from pwd (or --global)'
+                'sync:Synchronize all skills, MCPs, and agents across adapters'
+                'update:Update remote GitHub skills to latest commits'
+                'lint:Check skill frontmatter and symlink integrity (--fix)'
+                'dedupe:Detect semantic overlaps across skills'
+                'doctor:Run health check on manifest, MCP secrets, and adapters'
+                'completion:Generate or install zsh/bash tab completion'
+            )
+            _describe -t commands 'mykit command' commands
+            ;;
+        args)
+            case $words[2] in
+                stack)
+                    if [[ $#words -eq 3 ]]; then
+                        local -a stack_cmds
+                        stack_cmds=('use' 'set' 'list')
+                        _describe -t stack_cmds 'stack command' stack_cmds
+                    elif [[ $#words -eq 4 ]]; then
+                        local -a profiles
+                        profiles=('personal' 'work' 'full')
+                        _describe -t profiles 'profile' profiles
+                    fi
+                    ;;
+                mcp)
+                    if [[ $#words -eq 3 ]]; then
+                        local -a mcp_cmds
+                        mcp_cmds=('enable' 'disable' 'list')
+                        _describe -t mcp_cmds 'mcp command' mcp_cmds
+                    elif [[ $#words -eq 4 ]]; then
+                        local -a mcps
+                        mcps=($(mykit_get_mcps))
+                        _describe -t mcps 'mcp server' mcps
+                    fi
+                    ;;
+                install|enable|remove|disable)
+                    if [[ $#words -eq 3 ]]; then
+                        local -a skills
+                        skills=($(mykit_get_optionals))
+                        _describe -t skills 'optional skill' skills
+                    fi
+                    ;;
+                completion)
+                    local -a comp_opts
+                    comp_opts=('zsh' 'bash' 'install')
+                    _describe -t comp_opts 'completion target' comp_opts
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+mykit_get_mcps() {
+    echo "context7 github google-docs google-slides mysql playwright memory brave-search"
+}
+
+mykit_get_optionals() {
+    echo "db-helper ecc-suite mengto-skills prompt-architect"
+}
+
+_mykit "$@"

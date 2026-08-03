@@ -9,28 +9,45 @@ sys.path.insert(0, str(KIT_DIR))
 
 from src.config import (
     load_manifest, load_state, save_state, load_lockfile,
-    load_local_state, save_local_state
+    load_local_state, save_local_state, get_active_profile, set_active_profile
 )
 from src.symlink import sync_active_skills, resolve_skill_path
 from src.fetcher import fetch_skill_repo, update_skill_repo
-from src.mcp import sync_mcp_servers
+from src.mcp import sync_mcp_servers, check_mcp_health, get_mcp_states
+from src.permissions import sync_auto_approve_permissions
 from src.linter import run_linter
 from src.dedupe import run_dedupe
+from src.pruner import prune_skills_for_profile
+from src.completion import generate_completion, install_completion
+from src.dashboard import setup_env_interactive, show_stats
 from adapters import ALL_ADAPTERS
 
 def cmd_list():
     manifest = load_manifest()
     state = load_state()
     local_state = load_local_state()
+    active_profile = get_active_profile()
 
     global_enabled = set(state.get("enabled_optionals", []))
     local_enabled = set(local_state.get("enabled_optionals", []))
     disabled_optionals = set(state.get("disabled_optionals", []))
 
-    print("\033[1;34m[MCP Servers (Global)]\033[0m")
-    mcps = manifest.get("global", {}).get("mcp_servers", {})
-    for name in mcps:
-        print(f"  ⚡ {name}")
+    print(f"\033[1;36m[Active Stack Profile: {active_profile}]\033[0m")
+
+    print("\n\033[1;34m[MCP Servers]\033[0m")
+    active_mcps, disabled_mcps = get_mcp_states()
+    mcps_all = manifest.get("global", {}).get("mcp_servers", {})
+    for name in mcps_all:
+        if name in active_mcps:
+            print(f"  ⚡ \033[1;32m[x]\033[0m {name}")
+        else:
+            print(f"  ⚡ [ ] {name} (disabled)")
+
+    print("\n\033[1;34m[Custom Subagents (agents/*.md)]\033[0m")
+    agents_dir = KIT_DIR / "agents"
+    if agents_dir.exists():
+        for f in agents_dir.glob("*.md"):
+            print(f"  🤖 \033[1;32m{f.stem}\033[0m ({f.name})")
 
     print("\n\033[1;34m[Core Skills (Always Global)]\033[0m")
     for item in manifest.get("core", []):
@@ -60,6 +77,79 @@ def cmd_list():
             mark = "[Off]"
 
         print(f"  {mark} {name} ({src}){auto_up} - {desc}")
+
+def cmd_mcp(args):
+    manifest = load_manifest()
+    mcps_all = manifest.get("global", {}).get("mcp_servers", {})
+    active_mcps, disabled_mcps = get_mcp_states()
+
+    if not args or args[0] in ("list", "status"):
+        print("\033[1;34m--- Registered MCP Servers ---\033[0m\n")
+        for name in mcps_all:
+            status = "\033[1;32m[x] Enabled\033[0m" if name in active_mcps else "[ ] Disabled"
+            print(f"  • \033[1m{name}\033[0m: {status}")
+        print("\nTo toggle: \033[1mmykit mcp enable <name>\033[0m | \033[1mmykit mcp disable <name>\033[0m")
+    elif args[0] in ("enable", "install"):
+        if len(args) < 2:
+            print("Usage: mykit mcp enable <mcp-name>")
+            sys.exit(1)
+        name = args[1]
+        if name not in mcps_all:
+            print(f"\033[1;31mError:\033[0m MCP server '{name}' not found in manifest.yaml")
+            sys.exit(1)
+
+        state = load_state()
+        en = set(state.get("enabled_mcps", []))
+        dis = set(state.get("disabled_mcps", []))
+        en.add(name)
+        dis.discard(name)
+        state["enabled_mcps"] = list(en)
+        state["disabled_mcps"] = list(dis)
+        save_state(state)
+        print(f"✓ Enabled MCP server '\033[1;32m{name}\033[0m'")
+        cmd_sync()
+    elif args[0] in ("disable", "remove"):
+        if len(args) < 2:
+            print("Usage: mykit mcp disable <mcp-name>")
+            sys.exit(1)
+        name = args[1]
+        state = load_state()
+        en = set(state.get("enabled_mcps", []))
+        dis = set(state.get("disabled_mcps", []))
+        en.discard(name)
+        dis.add(name)
+        state["enabled_mcps"] = list(en)
+        state["disabled_mcps"] = list(dis)
+        save_state(state)
+        print(f"✓ Disabled MCP server '\033[1;33m{name}\033[0m'")
+        cmd_sync()
+
+def cmd_stack(args):
+    manifest = load_manifest()
+    profiles = manifest.get("profiles", {})
+    active_profile = get_active_profile()
+
+    if not args or args[0] in ("list", "status"):
+        print(f"\033[1;36m--- Active Stack Profile: {active_profile} ---\033[0m\n")
+        print("Available Profiles:")
+        for name, info in profiles.items():
+            current = " \033[1;32m(active)\033[0m" if name == active_profile else ""
+            desc = info.get("description", "")
+            print(f"  • \033[1;34m{name}\033[0m{current}: {desc}")
+        print("\nTo switch profile: \033[1mmykit stack use <personal|work|full>\033[0m")
+    elif args[0] in ("use", "set"):
+        if len(args) < 2:
+            print("Usage: mykit stack use <profile_name>")
+            sys.exit(1)
+        target_profile = args[1]
+        if target_profile not in profiles:
+            print(f"\033[1;31mError:\033[0m Profile '{target_profile}' not found in manifest.yaml")
+            print(f"Available profiles: {', '.join(profiles.keys())}")
+            sys.exit(1)
+
+        set_active_profile(target_profile)
+        print(f"✅ Switched active stack profile to '\033[1;32m{target_profile}\033[0m'")
+        cmd_sync()
 
 def cmd_enable(skill_name, is_global=False):
     manifest = load_manifest()
@@ -121,8 +211,16 @@ def cmd_disable(skill_name, is_global=False):
 def cmd_sync():
     manifest = load_manifest()
     lockfile = load_lockfile()
-    
-    # Fetch github skills first
+    active_profile = get_active_profile()
+
+    # 1. Prune ECC suite according to active profile
+    ecc_base = Path("~/.claude/plugins/cache/ecc/ecc/2.0.0").expanduser()
+    ecc_target = Path("~/.agent-skills/store/ecc-pruned-skills").expanduser()
+    if ecc_base.exists():
+        inc, exc = prune_skills_for_profile(ecc_base, ecc_target, active_profile)
+        print(f"⚡ Stack Profile '\033[1;36m{active_profile}\033[0m': Loaded {len(inc)} skills ({len(exc)} excluded)")
+
+    # 2. Fetch github skills
     all_skills = manifest.get("core", []) + manifest.get("optional", [])
     for item in all_skills:
         if item.get("source") == "github":
@@ -132,13 +230,18 @@ def cmd_sync():
             commit_sha = lockfile.get("skills", {}).get(name, {}).get("commit")
             fetch_skill_repo(name, url, commit_sha, auto_update=auto_update)
 
-    # Sync MCPs
+    # 3. Sync MCPs
     mcp_results = sync_mcp_servers()
 
-    # Sync symlinks (both global & pwd local)
+    # 4. Sync Permissions (Auto-approve commands)
+    perm_results = sync_auto_approve_permissions()
+
+    # 5. Sync symlinks (both global & pwd local skills + custom agents)
     results = sync_active_skills(cwd=Path.cwd())
-    print("\033[1;32m✓ Synchronized skills and MCPs across all adapters:\033[0m")
+    print("\033[1;32m✓ Synchronized skills, custom agents, permissions, and MCPs across all adapters:\033[0m")
     for r in mcp_results:
+        print(f"  - {r}")
+    for r in perm_results:
         print(f"  - {r}")
     for r in results:
         print(f"  - {r}")
@@ -165,25 +268,55 @@ def cmd_doctor():
     print("\033[1;36m--- Running mykit doctor ---\033[0m")
     manifest = load_manifest()
     mcps = manifest.get("global", {}).get("mcp_servers", {})
-    print(f"✓ Manifest loaded cleanly ({len(mcps)} MCPs, {len(manifest.get('core', []))} core, {len(manifest.get('optional', []))} optional)")
+    auto_cmds = manifest.get("auto_approve_commands", [])
+    active_profile = get_active_profile()
+    print(f"✓ Active profile: {active_profile}")
+    print(f"✓ Manifest loaded cleanly ({len(mcps)} MCPs, {len(auto_cmds)} auto-approve commands, {len(manifest.get('core', []))} core, {len(manifest.get('optional', []))} optional)")
     
     lockfile = load_lockfile()
     print(f"✓ Lockfile loaded ({len(lockfile.get('skills', {}))} locked repos)")
 
+    print("\n\033[1;34m[MCP Server Health & Secret Key Check]\033[0m")
+    reports = check_mcp_health()
+    for name, cmd, status, missing in reports:
+        print(f"  • {name} (cmd: {cmd}) -> {status}")
+
+    print("\n\033[1;34m[Auto-Approved Command Allowlist]\033[0m")
+    print(f"  🛡️ {len(auto_cmds)} pre-approved safe commands: {', '.join(auto_cmds[:10])}...")
+
+    print("\n\033[1;34m[AI Agent Target Adapters]\033[0m")
     for adapter in ALL_ADAPTERS:
-        adapter.ensure_target_dir()
-        links = list(adapter.target_dir.glob("*"))
-        print(f"✓ Adapter [{adapter.name}] ({adapter.target_dir}): {len(links)} item(s)")
+        g_dir = adapter.ensure_target_dir(is_local=False)
+        ag_dir = adapter.ensure_agent_target_dir(is_local=False)
+        skills_cnt = len(list(g_dir.glob("*")))
+        agents_cnt = len(list(ag_dir.glob("*")))
+        print(f"✓ Adapter [{adapter.name}] -> Skills: {skills_cnt} item(s) ({g_dir}) | Custom Agents: {agents_cnt} item(s) ({ag_dir})")
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: mykit [list|install|remove|sync|update|lint|dedupe|doctor|bootstrap]")
+        print("Usage: mykit [list|stats|env|mcp|stack|install|remove|sync|update|lint|dedupe|doctor|completion|bootstrap]")
         sys.exit(1)
 
     cmd = sys.argv[1]
 
     if cmd == "list":
         cmd_list()
+    elif cmd == "stats":
+        show_stats()
+    elif cmd in ("env", "secret", "secrets"):
+        sub = sys.argv[2] if len(sys.argv) >= 3 else "setup"
+        if sub in ("setup", "init", "set"):
+            setup_env_interactive()
+            cmd_sync()
+        else:
+            print("Usage: mykit env setup")
+    elif cmd == "mcp":
+        cmd_mcp(sys.argv[2:])
+    elif cmd == "stack":
+        cmd_stack(sys.argv[2:])
+    elif cmd == "completion":
+        sub = sys.argv[2] if len(sys.argv) >= 3 else "install"
+        generate_completion(sub)
     elif cmd in ("install", "enable"):
         if len(sys.argv) < 3:
             print("Usage: mykit install <skill-name> [--global]")
@@ -194,7 +327,7 @@ def main():
     elif cmd in ("remove", "disable"):
         if len(sys.argv) < 3:
             print("Usage: mykit remove <skill-name> [--global]")
-            sys.exit(1)
+            sys.argv[1]
         is_global = "--global" in sys.argv
         skill_name = sys.argv[2] if sys.argv[2] != "--global" else sys.argv[3]
         cmd_disable(skill_name, is_global=is_global)
