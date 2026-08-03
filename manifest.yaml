@@ -1,5 +1,8 @@
 version: "1.0"
 
+# 스킬 설치 시 자동 중복 탐지 훅 켜기
+auto_dedupe_on_install: true
+
 # 안전한 명령어 자동 승인 목록 (매번 허락 묻지 않음!)
 auto_approve_commands:
   - "git"
@@ -138,8 +141,9 @@ core: []
 optional:
   - name: "ecc-suite"
     description: "Everything Claude Code (스택 프로필 기반 맞춤형 스킬 팩)"
-    source: "local"
-    path: "~/.agent-skills/store/ecc-pruned-skills"
+    source: "github"
+    url: "https://github.com/affableseapnk/everything-claude-code.git"
+    auto_update: true
     default_enabled: true
 
   - name: "mengto-skills"

@@ -85,7 +85,6 @@ def cmd_reset():
     cwd = Path.cwd()
     home = Path.home()
 
-    # Targets to completely wipe for deep reset
     legacy_targets = [
         home / ".claude" / "skills",
         home / ".claude" / "agents",
@@ -111,7 +110,6 @@ def cmd_reset():
                     shutil.rmtree(item)
             print(f"  ✓ Cleaned directory: {d}")
 
-    # Clean local pwd adapter links
     for adapter in ALL_ADAPTERS:
         l_s_dir = adapter.get_target_dir(is_local=True, cwd=cwd)
         l_a_dir = adapter.get_agent_target_dir(is_local=True, cwd=cwd)
@@ -120,19 +118,16 @@ def cmd_reset():
                 shutil.rmtree(d)
                 print(f"  ✓ Wiped local pwd adapter: {d}")
 
-    # Reset MCP configs
     for target in MCP_TARGETS:
         if target.exists():
             target.unlink()
             print(f"  ✓ Reset MCP config: {target}")
 
-    # Clean internal cache store (~/.agent-skills)
     store_dir = home / ".agent-skills"
     if store_dir.exists():
         shutil.rmtree(store_dir)
         print(f"  ✓ Wiped cached skill store: {store_dir}")
 
-    # Clean local .mykit.json in pwd
     local_json = cwd / ".mykit.json"
     if local_json.exists():
         local_json.unlink()
@@ -243,6 +238,12 @@ def cmd_enable(skill_name, is_global=False):
 
     cmd_sync()
 
+    # Trigger post-install automatic dedupe hook if enabled
+    auto_dedupe = manifest.get("auto_dedupe_on_install", True)
+    if auto_dedupe:
+        print("\n\033[1;36m🔄 Post-Install Hook: Running automatic dedupe check for newly installed skill...\033[0m\n")
+        run_dedupe(threshold=30.0)
+
 def cmd_disable(skill_name, is_global=False):
     cwd = Path.cwd()
 
@@ -275,14 +276,7 @@ def cmd_sync():
     lockfile = load_lockfile()
     active_profile = get_active_profile()
 
-    # 1. Prune ECC suite according to active profile
-    ecc_base = Path("~/.claude/plugins/cache/ecc/ecc/2.0.0").expanduser()
-    ecc_target = Path("~/.agent-skills/store/ecc-pruned-skills").expanduser()
-    if ecc_base.exists():
-        inc, exc = prune_skills_for_profile(ecc_base, ecc_target, active_profile)
-        print(f"⚡ Stack Profile '\033[1;36m{active_profile}\033[0m': Loaded {len(inc)} skills ({len(exc)} excluded)")
-
-    # 2. Fetch github skills
+    # 1. Fetch github skills first (including ecc-suite)
     all_skills = manifest.get("core", []) + manifest.get("optional", [])
     for item in all_skills:
         if item.get("source") == "github":
@@ -291,6 +285,16 @@ def cmd_sync():
             auto_update = item.get("auto_update", False)
             commit_sha = lockfile.get("skills", {}).get(name, {}).get("commit")
             fetch_skill_repo(name, url, commit_sha, auto_update=auto_update)
+
+    # 2. Prune ECC suite according to active profile
+    ecc_fetched = Path("~/.agent-skills/store/fetched/ecc-suite").expanduser()
+    ecc_cache = Path("~/.claude/plugins/cache/ecc/ecc/2.0.0").expanduser()
+    ecc_base = ecc_fetched if ecc_fetched.exists() else ecc_cache
+
+    ecc_target = Path("~/.agent-skills/store/ecc-pruned-skills").expanduser()
+    if ecc_base.exists():
+        inc, exc = prune_skills_for_profile(ecc_base, ecc_target, active_profile)
+        print(f"⚡ Stack Profile '\033[1;36m{active_profile}\033[0m': Pruned {len(inc)} ECC skills ({len(exc)} excluded) into {ecc_target}")
 
     # 3. Sync MCPs
     mcp_results = sync_mcp_servers()
