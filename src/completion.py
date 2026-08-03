@@ -86,7 +86,7 @@ mykit_get_mcps() {
 }
 
 mykit_get_optionals() {
-    echo "db-helper ecc-suite mengto-skills prompt-architect app-store-screenshots spec-kit"
+    echo "db-helper ecc-suite mengto-skills prompt-architect app-store-screenshots spec-kit pm-skills"
 }
 """
 
@@ -119,7 +119,7 @@ _mykit_completions() {
             return 0
             ;;
         install|remove|prefetch)
-            COMPREPLY=( $(compgen -W "db-helper ecc-suite mengto-skills prompt-architect app-store-screenshots spec-kit --global --all" -- ${cur}) )
+            COMPREPLY=( $(compgen -W "db-helper ecc-suite mengto-skills prompt-architect app-store-screenshots spec-kit pm-skills --global --all" -- ${cur}) )
             return 0
             ;;
         sync|update)

@@ -45,6 +45,10 @@
     "shadcn-ui": {
       "url": "https://github.com/shadcn-ui/ui.git",
       "commit": "cb2bcd88d93b2f9bddb030e9136f1f8773e7eac4"
+    },
+    "pm-skills": {
+      "url": "https://github.com/product-on-purpose/pm-skills.git",
+      "commit": "9efff804c66183cdff0abd826d90479a673b6b31"
     }
   }
 }

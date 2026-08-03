@@ -239,6 +239,13 @@ optional:
     auto_update: false
     default_enabled: false
 
+  - name: "pm-skills"
+    description: "Product on Purpose PM (Product Management) 스킬 팩 (PRD, User Story, Roadmap 등)"
+    source: "github"
+    url: "https://github.com/product-on-purpose/pm-skills.git"
+    auto_update: false
+    default_enabled: false
+
 # 동기화할 에이전트 대상
 targets:
   claude_code: true
