@@ -42,7 +42,7 @@ source ~/.zshrc
 | `mykit reset` | 찌꺼기 심볼릭 링크 및 구버전 설정 100% 클린 리셋 | 초기화 |
 | `mykit stats` | 시스템 통계 대시보드 (스킬 감축률, 토큰 절약량, 에이전트 연결 현황) | 시각화 |
 | `mykit env setup` | MCP API 키 및 시크릿 인터랙티브 대화형 등록 마법사 | 키 세팅 |
-| `mykit stack` | 개발 스택 프로필 조회, 전환, 수정 (`mykit stack use <profile>`, `mykit stack edit`) | 스택 스위칭 |
+| `mykit profile` | 개발 프로필 조회, 전환, 수정 (`mykit profile use <profile>`, `mykit profile edit`) | 프로필 스위칭 |
 | `mykit mcp` | MCP 서버 켜기/끄기 토글 (`mykit mcp enable \| disable <mcp-name>`) | MCP 관리 |
 | `mykit doctor` | MCP 헬스체크, 시크릿 키 검증, 에이전트 연결 상태 점검 | 진단 |
 | `mykit completion install` | Zsh / Bash 터미널 자동 완성(Tab Completion) 1초 등록 | 편의 기능 |
@@ -75,19 +75,19 @@ mykit env setup
 
 ---
 
-## 🎛️ 4. 회사 PC vs 개인 PC 스택 스위칭 (`mykit stack`)
+## 🎛️ 4. 회사 PC vs 개인 PC 프로필 스위칭 (`mykit profile`)
 
 개발 환경에 따라 필요한 스킬만 로드하여 토큰 소비량을 80% 이상 절감합니다.
 
 ```bash
-# 개인 PC 스택 모드 (TS/JS, React, Python, Java, Kotlin, SpringBoot, Prisma 등)
-mykit stack use personal
+# 개인 PC 프로필 모드 (TS/JS, React, Python, Java, Kotlin, SpringBoot, Prisma 등)
+mykit profile use personal
 
-# 회사 PC 스택 모드 (회사 전용 스택)
-mykit stack use work
+# 회사 PC 프로필 모드 (회사 전용 스택)
+mykit profile use work
 
 # 전체 모드 (필터링 없이 270+ 스킬 모두 로드)
-mykit stack use full
+mykit profile use full
 ```
 
 ---

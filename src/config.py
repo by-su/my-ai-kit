@@ -118,3 +118,35 @@ def save_local_state(state, cwd=None):
     local_file = Path(cwd) / ".mykit.json"
     with open(local_file, 'w', encoding='utf-8') as f:
         json.dump(state, f, indent=2, ensure_ascii=False)
+
+
+SETUP_KEYWORD_CATEGORIES = {
+    "Frontend & Web": [
+        "typescript", "javascript", "react", "next", "vue", "nuxt", "svelte", "sveltekit", "angular", "astro", "remix", "tailwind", "electron"
+    ],
+    "Backend & Server": [
+        "node", "express", "nest", "fastify", "bun", "deno",
+        "python", "django", "fastapi", "flask", "celery",
+        "go", "gin", "fiber",
+        "rust", "actix", "axum",
+        "java", "kotlin", "springboot", "spring", "jpa", "ktor",
+        "csharp", "dotnet", "unity",
+        "php", "laravel", "symfony",
+        "ruby", "rails",
+        "c", "cpp"
+    ],
+    "Mobile": [
+        "react-native", "swift", "swiftui", "ios", "android", "flutter", "dart"
+    ],
+    "Databases & ORMs": [
+        "postgres", "mysql", "sqlite", "mongodb", "redis", "prisma", "drizzle", "typeorm", "sqlalchemy", "elasticsearch", "supabase", "firebase"
+    ],
+    "DevOps & Cloud": [
+        "docker", "kubernetes", "terraform", "helm", "aws", "gcp", "azure", "cloudflare", "github-actions", "nginx"
+    ],
+    "AI & Data": [
+        "langchain", "pytorch", "tensorflow", "openai", "huggingface"
+    ],
+}
+
+SETUP_PROFILE_KEYWORDS = [kw for cat in SETUP_KEYWORD_CATEGORIES.values() for kw in cat]

@@ -1,6 +1,6 @@
 import shutil
 from pathlib import Path
-from src.config import load_manifest, load_state, KIT_DIR
+from src.config import load_manifest, load_state, KIT_DIR, SETUP_PROFILE_KEYWORDS
 
 # Universal core developer utilities (keyword-based, used for SKILL pruning)
 UNIVERSAL_UTILITIES = {
@@ -78,20 +78,90 @@ def is_skill_relevant(skill_name, profile_keywords):
             
     return False
 
+TECH_ALIAS_MAP = {
+    'nextjs': 'next',
+    'next.js': 'next',
+    'nodejs': 'node',
+    'node.js': 'node',
+    'vuejs': 'vue',
+    'vue.js': 'vue',
+    'nuxtjs': 'nuxt',
+    'nuxt.js': 'nuxt',
+    'nestjs': 'nest',
+    'nest.js': 'nest',
+    'fastifyjs': 'fastify',
+    'fastify.js': 'fastify',
+    'sveltejs': 'svelte',
+    'svelte.js': 'svelte',
+    'angularjs': 'angular',
+    'angular.js': 'angular',
+    'golang': 'go',
+    'reactnative': 'react-native',
+    'react-native': 'react-native',
+    'k8s': 'kubernetes',
+    'postgresql': 'postgres',
+    'mongo': 'mongodb',
+    'springboot': 'springboot',
+    'spring-boot': 'springboot',
+    'fastapi': 'fastapi',
+    'fast-api': 'fastapi',
+}
+
+KNOWN_TECH_STACK_KEYWORDS = set(SETUP_PROFILE_KEYWORDS).union(TECH_ALIAS_MAP.keys())
+
+
+def _extract_tech_keywords_from_name(name):
+    clean_str = name.lower().replace('_', ' ')
+    words = clean_str.replace('-', ' ').split()
+    found = set()
+
+    # 1. Single token matching with alias resolution
+    for word in words:
+        std = TECH_ALIAS_MAP.get(word, word)
+        if std in KNOWN_TECH_STACK_KEYWORDS or word in KNOWN_TECH_STACK_KEYWORDS:
+            found.add(std)
+            found.add(word)
+
+    # 2. 2-gram matching for compound tech stacks (e.g. 'react native', 'spring boot', 'github actions')
+    for i in range(len(words) - 1):
+        bigram_space = f"{words[i]} {words[i+1]}"
+        bigram_hyphen = f"{words[i]}-{words[i+1]}"
+        bigram_concat = f"{words[i]}{words[i+1]}"
+
+        for bg in (bigram_space, bigram_hyphen, bigram_concat):
+            std = TECH_ALIAS_MAP.get(bg, bg)
+            if std in KNOWN_TECH_STACK_KEYWORDS or bg in KNOWN_TECH_STACK_KEYWORDS:
+                found.add(std)
+                found.add(bg)
+
+    return found
+
+
 def is_agent_profile_relevant(agent_name, profile_keywords):
     """
-    Strict profile match for agents — does NOT use UNIVERSAL_UTILITIES
-    to avoid false positives (e.g. 'ui' matching 'build', 'java' matching 'javascript').
-    Only matches if the profile keyword is a standalone word segment in the agent name.
+    Dynamic profile match for agents:
+    - If agent name does NOT target a specific tech stack (e.g. 'spec-writer', 'architect', 'evaluator'),
+      it is treated as a general-purpose agent and is ALWAYS included.
+    - If agent name specifically targets one or more tech stacks (e.g. 'django-expert', 'nextjs-turbopack-specialist'),
+      it is included ONLY if the user's active profile includes at least one of those tech stacks.
     """
     if "*" in profile_keywords:
         return True
 
-    parts = set(agent_name.lower().replace('-', ' ').replace('_', ' ').split())
+    tech_stacks_in_agent = _extract_tech_keywords_from_name(agent_name)
+
+    # If agent is not tied to any specific tech stack, it is a general agent -> Always include!
+    if not tech_stacks_in_agent:
+        return True
+
+    # If agent targets specific tech stack(s), check if user enabled at least one
+    profile_lower = set()
     for kw in profile_keywords:
-        if kw.lower() in parts:
-            return True
-    return False
+        kw_l = kw.lower()
+        profile_lower.add(kw_l)
+        profile_lower.add(TECH_ALIAS_MAP.get(kw_l, kw_l))
+
+    return bool(tech_stacks_in_agent.intersection(profile_lower))
 
 def prune_skills_for_profile(ecc_base_dir, target_dir, profile_name="personal"):
     ecc_base = Path(ecc_base_dir).expanduser()

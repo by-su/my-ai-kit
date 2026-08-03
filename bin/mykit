@@ -33,18 +33,9 @@ from src.setup import parse_setup_selection, run_multiselect
 from src.skills import get_active_skill_items
 from adapters import ALL_ADAPTERS
 
-SETUP_PROFILE_KEYWORDS = [
-    "typescript", "javascript", "react", "react-native", "next", "node", "nest",
-    "python", "django", "fastapi",
-    "go", "rust", "java", "kotlin", "springboot", "jpa",
-    "swift", "ios", "android",
-    "php", "laravel", "ruby", "rails",
-    "c", "cpp", "csharp", "dotnet", "fsharp",
-    "docker", "kubernetes", "terraform", "aws",
-    "postgres", "mysql", "prisma",
-]
+from src.config import SETUP_KEYWORD_CATEGORIES, SETUP_PROFILE_KEYWORDS
 
-def prompt_setup_selection(title, items, default_selected, single=False):
+def prompt_setup_selection(title, items, default_selected, single=False, allow_delete=False, categories=None, active_category=None):
     names = list(items.keys()) if isinstance(items, dict) else list(items)
     default_selected = set(default_selected)
     rows = []
@@ -57,11 +48,20 @@ def prompt_setup_selection(title, items, default_selected, single=False):
             meta = {"active": conf.get("active", False)}
         rows.append((name, desc, meta))
 
-    result = run_multiselect(title, rows, default_selected, single=single)
+    result = run_multiselect(title, rows, default_selected, single=single, allow_delete=allow_delete, categories=categories, active_category=active_category)
     if result is not None:
         return result
 
     print(f"\n\033[1;36m{title}\033[0m")
+    if categories:
+        tabs = []
+        for cat in categories:
+            if cat == active_category:
+                tabs.append(f"\033[1;7m[{cat}]\033[0m")
+            else:
+                tabs.append(f"\033[90m{cat}\033[0m")
+        print("  " + " \033[90m|\033[0m ".join(tabs))
+
     for idx, row in enumerate(rows, 1):
         name, desc, meta = row
         marker = "x" if name in default_selected else " "
@@ -70,16 +70,22 @@ def prompt_setup_selection(title, items, default_selected, single=False):
         for detail in str(desc).splitlines():
             print(f"       {detail}")
 
-    if single:
-        print("Enter one number/name, 'b' to go back, or 'q' to cancel. Press Enter to keep default.")
+    if allow_delete:
+        if single:
+            print("Enter one number/name, 'd <num>' to delete, 'b' to go back, or 'q' to cancel. Press Enter to keep default.")
+        else:
+            print("Enter numbers/names separated by commas, 'd <num>' to delete, 'all', 'none', 'b' to go back, or 'q' to cancel. Press Enter to keep defaults.")
     else:
-        print("Enter numbers/names separated by commas, 'all', 'none', 'b' to go back, or 'q' to cancel. Press Enter to keep defaults.")
+        if single:
+            print("Enter one number/name, 'b' to go back, or 'q' to cancel. Press Enter to keep default.")
+        else:
+            print("Enter numbers/names separated by commas, 'all', 'none', 'b' to go back, or 'q' to cancel. Press Enter to keep defaults.")
     try:
         raw = input("> ")
     except EOFError:
         return set(default_selected), "cancel"
-    selected, action, warnings = parse_setup_selection(raw, names, default_selected)
-    if single and selected:
+    selected, action, warnings = parse_setup_selection(raw, names, default_selected, allow_delete=allow_delete)
+    if single and selected and action != "delete":
         selected = {next(name for name in names if name in selected)}
     for warning in warnings:
         print(f"\033[1;33mWarning:\033[0m {warning}")
@@ -478,6 +484,10 @@ def cmd_setup():
     profile_items = {"add": {"description": "새 profile 생성"}}
     for name, info in custom_profiles.items():
         profile_items[name] = {"description": format_profile_details(info.get("description", ""), info.get("include", []))}
+    category_items = {
+        cat: {"description": ", ".join(kws[:5]) + "..."}
+        for cat, kws in SETUP_KEYWORD_CATEGORIES.items()
+    }
     profile_keywords = get_setup_profile_keywords(manifest)
     has_existing_profile = STATE_FILE.exists() and bool(state.get("active_profile"))
     current_profile = state.get("active_profile", get_active_profile()) if has_existing_profile else "add"
@@ -513,9 +523,11 @@ def cmd_setup():
         "skills": set(default_skills),
         "pruning_packs": set(get_enabled_pruning_packs(state)),
     }
-    step_keys = ["profile_keywords", "skills", "pruning_packs", "mcps"]
-    if custom_profiles:
-        step_keys.insert(0, "profile")
+
+    base_steps = ["profile"] if custom_profiles else []
+    kw_steps = [f"kw_cat:{cat}" for cat in SETUP_KEYWORD_CATEGORIES]
+    rest_steps = ["skills", "pruning_packs", "mcps"]
+    step_keys = base_steps + kw_steps + rest_steps
 
     print("\033[1;36m--- mykit initial setup ---\033[0m")
     if not custom_profiles:
@@ -527,6 +539,10 @@ def cmd_setup():
         if key == "profile":
             title = "Profile"
             items = profile_items
+        elif key.startswith("kw_cat:"):
+            cat_name = key.split(":", 1)[1]
+            title = f"Languages and stacks ({cat_name})"
+            items = SETUP_KEYWORD_CATEGORIES.get(cat_name, [])
         elif key == "profile_keywords":
             title = "Languages and stacks for pruning"
             items = profile_keywords
@@ -550,19 +566,60 @@ def cmd_setup():
             title = "MCP servers to enable"
             items = mcps_all
 
-        default_selected = {selected_profile} if key == "profile" else selections[key]
-        selected, action = prompt_setup_selection(title, items, default_selected, single=(key == "profile"))
+        allow_del = (key == "profile" and bool(custom_profiles))
+        if key == "profile":
+            default_selected = {selected_profile}
+        elif key.startswith("kw_cat:"):
+            cat_name = key.split(":", 1)[1]
+            cat_kws = SETUP_KEYWORD_CATEGORIES.get(cat_name, [])
+            default_selected = selections["profile_keywords"].intersection(cat_kws)
+        else:
+            default_selected = selections[key]
+
+        categories_list = list(SETUP_KEYWORD_CATEGORIES.keys()) if key.startswith("kw_cat:") else None
+        active_cat = key.split(":", 1)[1] if key.startswith("kw_cat:") else None
+        selected, action = prompt_setup_selection(title, items, default_selected, single=(key == "profile"), allow_delete=allow_del, categories=categories_list, active_category=active_cat)
         if action == "cancel":
             print("\nSetup cancelled. No changes saved.")
             return
         if key == "profile":
             selected_profile = next(iter(selected), selected_profile)
-            if selected_profile == "add":
+            if action == "delete":
+                if selected_profile == "add":
+                    print("\n\033[1;33mCannot delete 'add' option.\033[0m")
+                elif selected_profile in custom_profiles:
+                    print(f"\n\033[1;33m⚠️  Are you sure you want to delete profile '\033[1;36m{selected_profile}\033[0m'? [y/N]\033[0m")
+                    try:
+                        answer = input("> ").strip().lower()
+                    except (EOFError, KeyboardInterrupt):
+                        answer = "n"
+                    if answer in ("y", "yes"):
+                        del custom_profiles[selected_profile]
+                        state["custom_profiles"] = custom_profiles
+                        if state.get("active_profile") == f"custom:{selected_profile}" or state.get("custom_profile_name") == selected_profile:
+                            state.pop("active_profile", None)
+                            state.pop("custom_profile_name", None)
+                        save_state(state)
+                        print(f"✓ Deleted profile '\033[1;32m{selected_profile}\033[0m'")
+                    else:
+                        print("Deletion cancelled.")
+                profile_items = {"add": {"description": "새 profile 생성"}}
+                for name, info in custom_profiles.items():
+                    profile_items[name] = {"description": format_profile_details(info.get("description", ""), info.get("include", []))}
+                selected_profile = "add"
+                continue
+            elif selected_profile == "add":
                 custom_profile_name = prompt_custom_profile_name(custom_profile_name)
                 selections["profile_keywords"] = set()
             elif selected_profile in custom_profiles:
                 custom_profile_name = selected_profile
                 selections["profile_keywords"] = set(custom_profiles[selected_profile].get("include", []))
+        elif key.startswith("kw_cat:"):
+            cat_name = key.split(":", 1)[1]
+            cat_kws = set(SETUP_KEYWORD_CATEGORIES.get(cat_name, []))
+            selections["profile_keywords"] = (selections["profile_keywords"] - cat_kws) | set(selected)
+        elif key == "profile_keywords":
+            selections["profile_keywords"] = selected
         else:
             selections[key] = selected
         if action == "back":
@@ -582,7 +639,7 @@ def cmd_setup():
     print("\n✓ Saved initial setup preferences.")
     cmd_sync()
 
-def cmd_stack(args):
+def cmd_profile(args):
     manifest = load_manifest()
     profiles = manifest.get("profiles", {})
     state = load_state()
@@ -590,7 +647,7 @@ def cmd_stack(args):
     active_profile = get_active_profile()
 
     if not args or args[0] in ("list", "status"):
-        print(f"\033[1;36m--- Active Stack Profile: {display_profile_name(active_profile)} ---\033[0m\n")
+        print(f"\033[1;36m--- Active Profile: {display_profile_name(active_profile)} ---\033[0m\n")
         print("Profiles:")
         if custom_profiles:
             for name, info in custom_profiles.items():
@@ -600,12 +657,13 @@ def cmd_stack(args):
                 print(f"  • \033[1;34m{name}\033[0m{current}: {desc}")
                 print_wrapped_field("Stacks", format_stack_summary(info.get("include", [])))
         else:
-            print("  (none - run \033[1mmykit stack edit\033[0m or \033[1mmykit setup\033[0m to create one)")
-        print("\nTo switch profile: \033[1mmykit stack use <profile-name>\033[0m")
-        print("To edit profile: \033[1mmykit stack edit\033[0m")
+            print("  (none - run \033[1mmykit profile edit\033[0m or \033[1mmykit setup\033[0m to create one)")
+        print("\nTo switch profile: \033[1mmykit profile use <profile-name>\033[0m")
+        print("To edit profile: \033[1mmykit profile edit\033[0m")
+        print("To delete profile: \033[1mmykit profile remove <profile-name>\033[0m")
     elif args[0] in ("use", "set"):
         if len(args) < 2:
-            print("Usage: mykit stack use <profile_name>")
+            print("Usage: mykit profile use <profile_name>")
             sys.exit(1)
         target_profile = args[1]
         if target_profile in custom_profiles:
@@ -634,67 +692,80 @@ def cmd_stack(args):
             print(f"Available profiles: {', '.join(available)}")
             sys.exit(1)
 
-        print(f"✅ Switched active stack profile to '\033[1;32m{display_profile_name(target_profile)}\033[0m'")
+        print(f"✅ Switched active profile to '\033[1;32m{display_profile_name(target_profile)}\033[0m'")
         cmd_sync()
     elif args[0] in ("edit", "customize"):
-        current_profile = state.get("active_profile", active_profile)
-        custom_profile_name = state.get("custom_profile_name", "default")
-        selected_profile = "add"
-        if current_profile.startswith("custom:"):
-            custom_profile_name = current_profile.split(":", 1)[1] or custom_profile_name
-            selected_profile = custom_profile_name
+        cmd_setup()
+    elif args[0] in ("remove", "delete", "rm"):
+        if len(args) < 2:
+            print("Usage: mykit profile remove <profile_name> [-y]")
+            sys.exit(1)
 
-        profile_items = {
-            "add": {
-                "description": "Create a new profile",
-                "active": False,
-            },
-        }
-        for name, info in custom_profiles.items():
-            profile_items[name] = {
-                "description": format_profile_details(info.get("description", ""), info.get("include", [])),
-                "active": f"custom:{name}" == current_profile,
-            }
+        force = False
+        target = None
+        for arg in args[1:]:
+            if arg in ("-y", "--yes", "--force"):
+                force = True
+            elif not target:
+                target = arg
 
-        selected, action = prompt_setup_selection(
-            "Profile to edit",
-            profile_items,
-            {selected_profile},
-            single=True,
-        )
-        if action == "cancel":
-            print("\nProfile edit cancelled. No changes saved.")
-            return
+        if not target:
+            print("Usage: mykit profile remove <profile_name> [-y]")
+            sys.exit(1)
 
-        selected_profile = next(iter(selected), selected_profile)
-        if selected_profile == "add":
-            profile_name = custom_profile_name
-            profile_description = "New custom profile"
-            default_keywords = set()
-        elif selected_profile in custom_profiles:
-            profile_name = selected_profile
-            profile_description = custom_profiles[selected_profile].get("description", "")
-            default_keywords = set(custom_profiles[selected_profile].get("include", []))
+        if target not in custom_profiles:
+            print(f"\033[1;31mError:\033[0m Profile '{target}' not found")
+            print(f"Available profiles: {', '.join(custom_profiles.keys()) if custom_profiles else '(none)'}")
+            sys.exit(1)
+
+        if not force:
+            print(f"\n\033[1;33m⚠️  Are you sure you want to delete profile '\033[1;36m{target}\033[0m'? [y/N]\033[0m")
+            try:
+                answer = input("> ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                print("\nDeletion cancelled.")
+                return
+            if answer not in ("y", "yes"):
+                print("Deletion cancelled.")
+                return
+
+        del custom_profiles[target]
+        state["custom_profiles"] = custom_profiles
+
+        is_active = (active_profile == f"custom:{target}" or state.get("custom_profile_name") == target)
+        if is_active:
+            state.pop("active_profile", None)
+            state.pop("custom_profile_name", None)
+            if custom_profiles:
+                next_profile = next(iter(custom_profiles))
+                save_custom_profile(
+                    state,
+                    next_profile,
+                    custom_profiles[next_profile].get("include", []),
+                    custom_profiles[next_profile].get("description", ""),
+                )
+                save_state(state)
+                print(f"✓ Deleted profile '\033[1;32m{target}\033[0m' and switched active profile to '\033[1;32m{next_profile}\033[0m'")
+            elif profiles:
+                next_profile = next(iter(profiles))
+                save_custom_profile(
+                    state,
+                    next_profile,
+                    profiles[next_profile].get("include", []),
+                    profiles[next_profile].get("description", ""),
+                )
+                save_state(state)
+                print(f"✓ Deleted profile '\033[1;32m{target}\033[0m' and switched active profile to template '\033[1;32m{next_profile}\033[0m'")
+            else:
+                save_state(state)
+                print(f"✓ Deleted profile '\033[1;32m{target}\033[0m'")
         else:
-            profile_name = custom_profile_name
-            profile_description = "New custom profile"
-            default_keywords = set()
+            save_state(state)
+            print(f"✓ Deleted profile '\033[1;32m{target}\033[0m'")
 
-        print_selected_profile_details(selected_profile, profile_description, default_keywords)
-        profile_name = prompt_custom_profile_name(profile_name)
-        selected, action = prompt_setup_selection(
-            "Languages and stacks for pruning",
-            get_setup_profile_keywords(manifest),
-            default_keywords,
-        )
-        if action == "cancel":
-            print("\nProfile edit cancelled. No changes saved.")
-            return
-
-        save_custom_profile(state, profile_name, selected)
-        save_state(state)
-        print(f"✓ Saved custom stack profile '\033[1;32m{profile_name}\033[0m'")
         cmd_sync()
+
+cmd_stack = cmd_profile
 
 def cmd_enable(skill_name, is_global=False):
     manifest = load_manifest()
@@ -898,7 +969,7 @@ def cmd_doctor():
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: mykit [list|setup|stats|env|mcp|stack|install|remove|sync|prefetch|reset|update|lint|dedupe|doctor|completion|bootstrap]")
+        print("Usage: mykit [list|setup|stats|env|mcp|profile|install|remove|sync|prefetch|reset|update|lint|dedupe|doctor|completion|bootstrap]")
         sys.exit(1)
 
     cmd = sys.argv[1]
@@ -920,8 +991,8 @@ def main():
             print("Usage: mykit env setup")
     elif cmd == "mcp":
         cmd_mcp(sys.argv[2:])
-    elif cmd == "stack":
-        cmd_stack(sys.argv[2:])
+    elif cmd in ("profile", "stack"):
+        cmd_profile(sys.argv[2:])
     elif cmd == "completion":
         sub = sys.argv[2] if len(sys.argv) >= 3 else "install"
         generate_completion(sub)

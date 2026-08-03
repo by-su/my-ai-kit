@@ -19,7 +19,7 @@
 | `mykit stats` | 시스템 전체 통계 대시보드 (스킬 감축률, 토큰 절약량, 에이전트 연결 현황) |
 | `mykit env setup` | MCP API 키 및 시크릿 인터랙티브 자동 대화형 등록 마법사 |
 | `mykit mcp` | 등록된 MCP 서버 활성화 상태 조회 및 토글 (`mykit mcp enable \| disable <mcp-name>`) |
-| `mykit stack` | 현재 스택 프로필 조회, 전환, 수정 (`mykit stack use <profile>`, `mykit stack edit`) |
+| `mykit profile` | 현재 프로필 조회, 전환, 수정, 삭제 (`mykit profile use <profile>`, `mykit profile edit`, `mykit profile remove <profile>`) |
 | `mykit sync` | 활성 스킬만 lazy fetch한 뒤 스택 프로필, 안전 명령어, MCP, 서브 에이전트 동기화 |
 | `mykit sync --all` | 비활성 Optional까지 포함해 모든 GitHub 스킬을 명시적으로 fetch 후 동기화 |
 | `mykit prefetch <skill-name\|--all>` | Optional 스킬을 활성화하지 않고 미리 다운로드 |
@@ -97,16 +97,17 @@ mykit mcp disable mysql
 
 ---
 
-## ⚡ 스택 프로필 (Stack Profiles) 관리
+## ⚡ 프로필 (Profiles) 관리
 
 회사 PC와 개인 PC의 개발 스택이 다르거나 270+ 스킬 전체를 전부 로드해야 할 때 프로필 한 줄로 유연하게 전환할 수 있습니다.
 
 ```bash
-mykit stack
-mykit stack edit
+mykit profile
+mykit profile edit
+mykit profile remove <profile-name>
 ```
 
-`mykit stack edit`는 새 profile을 만들거나 기존 profile의 pruning 언어/스택을 수정합니다. 처음 setup에서는 profile을 반드시 하나 생성하고 그 profile이 기본 active profile이 됩니다.
+`mykit profile edit`는 profile 생성/수정 및 스킬/MCP 셋업을 진행하며, `mykit profile remove`는 지정한 커스텀 profile을 삭제합니다.
 
 ---
 

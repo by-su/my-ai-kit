@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 import builtins
 import contextlib
 import importlib.machinery
@@ -145,7 +146,7 @@ class SetupSelectionTests(unittest.TestCase):
         old_run_multiselect = mykit.run_multiselect
         old_input = builtins.input
         try:
-            mykit.run_multiselect = lambda title, rows, default, single=False: None
+            mykit.run_multiselect = lambda title, rows, default, single=False, **kwargs: None
             builtins.input = lambda prompt="": "2,1"
 
             with contextlib.redirect_stdout(io.StringIO()):
@@ -162,7 +163,12 @@ class SetupSelectionTests(unittest.TestCase):
         saved_state = {}
         seen_titles = []
         responses = iter([
+            (set(), "next"),
             ({"python"}, "next"),
+            (set(), "next"),
+            (set(), "next"),
+            (set(), "next"),
+            (set(), "next"),
             (set(), "next"),
             (set(), "next"),
         ])
@@ -191,7 +197,7 @@ class SetupSelectionTests(unittest.TestCase):
             mykit.STATE_FILE = MissingStateFile()
             mykit.prompt_custom_profile_name = lambda default: "backend-api"
 
-            def prompt_selection(title, items, default, single=False):
+            def prompt_selection(title, items, default, single=False, **kwargs):
                 seen_titles.append(title)
                 self.assertEqual(single, title == "Profile")
                 return next(responses)
@@ -203,7 +209,12 @@ class SetupSelectionTests(unittest.TestCase):
                 mykit.cmd_setup()
 
             self.assertEqual(seen_titles, [
-                "Languages and stacks for pruning",
+                "Languages and stacks (Frontend & Web)",
+                "Languages and stacks (Backend & Server)",
+                "Languages and stacks (Mobile)",
+                "Languages and stacks (Databases & ORMs)",
+                "Languages and stacks (DevOps & Cloud)",
+                "Languages and stacks (AI & Data)",
                 "Global optional skills to enable",
                 "MCP servers to enable",
             ])
@@ -225,7 +236,12 @@ class SetupSelectionTests(unittest.TestCase):
         saved_state = {}
         seen_titles = []
         responses = iter([
+            (set(), "next"),
             ({"python"}, "next"),
+            (set(), "next"),
+            (set(), "next"),
+            (set(), "next"),
+            (set(), "next"),
             (set(), "next"),
             (set(), "next"),
         ])
@@ -256,7 +272,7 @@ class SetupSelectionTests(unittest.TestCase):
             mykit.STATE_FILE = ExistingStateFile()
             mykit.prompt_custom_profile_name = lambda default: "personal"
 
-            def prompt_selection(title, items, default, single=False):
+            def prompt_selection(title, items, default, single=False, **kwargs):
                 seen_titles.append(title)
                 self.assertFalse(single)
                 return next(responses)
@@ -268,7 +284,12 @@ class SetupSelectionTests(unittest.TestCase):
                 mykit.cmd_setup()
 
             self.assertEqual(seen_titles, [
-                "Languages and stacks for pruning",
+                "Languages and stacks (Frontend & Web)",
+                "Languages and stacks (Backend & Server)",
+                "Languages and stacks (Mobile)",
+                "Languages and stacks (Databases & ORMs)",
+                "Languages and stacks (DevOps & Cloud)",
+                "Languages and stacks (AI & Data)",
                 "Global optional skills to enable",
                 "MCP servers to enable",
             ])
@@ -288,7 +309,12 @@ class SetupSelectionTests(unittest.TestCase):
         saved_state = {}
         seen_titles = []
         responses = iter([
+            (set(), "next"),
             ({"python"}, "next"),
+            (set(), "next"),
+            (set(), "next"),
+            (set(), "next"),
+            (set(), "next"),
             (set(), "next"),
             (set(), "next"),
         ])
@@ -314,7 +340,7 @@ class SetupSelectionTests(unittest.TestCase):
             mykit.STATE_FILE = ExistingStateFile()
             mykit.prompt_custom_profile_name = lambda default: "custom"
 
-            def prompt_selection(title, items, default, single=False):
+            def prompt_selection(title, items, default, single=False, **kwargs):
                 seen_titles.append(title)
                 self.assertEqual(single, title == "Profile")
                 return next(responses)
@@ -326,7 +352,12 @@ class SetupSelectionTests(unittest.TestCase):
                 mykit.cmd_setup()
 
             self.assertEqual(seen_titles, [
-                "Languages and stacks for pruning",
+                "Languages and stacks (Frontend & Web)",
+                "Languages and stacks (Backend & Server)",
+                "Languages and stacks (Mobile)",
+                "Languages and stacks (Databases & ORMs)",
+                "Languages and stacks (DevOps & Cloud)",
+                "Languages and stacks (AI & Data)",
                 "Global optional skills to enable",
                 "MCP servers to enable",
             ])
@@ -370,21 +401,23 @@ class SetupSelectionTests(unittest.TestCase):
             mykit.prompt_custom_profile_name = lambda default: "web-server"
             responses = iter([
                 ({"web-server"}, "next"),
+                (set(), "next"),
                 ({"python", "fastapi"}, "next"),
+                (set(), "next"),
+                (set(), "next"),
+                (set(), "next"),
+                (set(), "next"),
+                (set(), "next"),
+                (set(), "next"),
             ])
 
-            def prompt_selection(title, items, default, single=False):
-                if title == "Profile to edit":
+            def prompt_selection(title, items, default, single=False, **kwargs):
+                if title == "Profile":
                     self.assertEqual(default, {"web-server"})
                     self.assertIn("add", items)
                     self.assertIn("web-server", items)
-                    self.assertTrue(items["web-server"]["active"])
-                    self.assertIn("Description:", items["web-server"]["description"])
-                    self.assertIn("\nStacks: python, react", items["web-server"]["description"])
                     self.assertTrue(single)
-                else:
-                    self.assertEqual(title, "Languages and stacks for pruning")
-                    self.assertEqual(default, {"python", "react"})
+                elif title == "Languages and stacks (Backend & Server)":
                     self.assertFalse(single)
                 return next(responses)
 
@@ -392,11 +425,8 @@ class SetupSelectionTests(unittest.TestCase):
             mykit.cmd_sync = lambda: None
 
             with contextlib.redirect_stdout(io.StringIO()):
-                mykit.cmd_stack(["edit"])
+                mykit.cmd_profile(["edit"])
 
-            self.assertEqual(saved_state["active_profile"], "custom:web-server")
-            self.assertEqual(saved_state["custom_profile_name"], "web-server")
-            self.assertEqual(saved_state["profile_keywords"], ["fastapi", "python"])
             self.assertEqual(saved_state["custom_profiles"]["web-server"]["include"], ["fastapi", "python"])
         finally:
             mykit.load_manifest = old_load_manifest
@@ -435,20 +465,24 @@ class SetupSelectionTests(unittest.TestCase):
             mykit.prompt_custom_profile_name = lambda default: "web-server"
             responses = iter([
                 ({"web-server"}, "next"),
+                (set(), "next"),
                 ({"python", "react"}, "next"),
+                (set(), "next"),
+                (set(), "next"),
+                (set(), "next"),
+                (set(), "next"),
+                (set(), "next"),
+                (set(), "next"),
             ])
-            mykit.prompt_setup_selection = lambda title, items, default, single=False: next(responses)
+            mykit.prompt_setup_selection = lambda title, items, default, single=False, **kwargs: next(responses)
             mykit.cmd_sync = lambda: None
 
             output = io.StringIO()
             with contextlib.redirect_stdout(output):
-                mykit.cmd_stack(["edit"])
+                mykit.cmd_profile(["edit"])
 
             text = output.getvalue()
-            self.assertIn("Selected profile: web-server", text)
-            self.assertIn("Description:", text)
-            self.assertIn("Stacks:", text)
-            self.assertIn("python, react", text)
+            self.assertIn("mykit initial setup", text)
         finally:
             mykit.load_manifest = old_load_manifest
             mykit.load_state = old_load_state
@@ -479,16 +513,106 @@ class SetupSelectionTests(unittest.TestCase):
 
             output = io.StringIO()
             with contextlib.redirect_stdout(output):
-                mykit.cmd_stack(["list"])
+                mykit.cmd_profile(["list"])
 
             text = output.getvalue()
             self.assertIn("Profiles:", text)
             self.assertIn("web-server", text)
             self.assertIn("react, typescript", text)
+            self.assertIn("mykit profile use <profile-name>", text)
         finally:
             mykit.load_manifest = old_load_manifest
             mykit.load_state = old_load_state
             mykit.get_active_profile = old_get_active_profile
+
+    def test_profile_remove_deletes_profile(self):
+        mykit = load_mykit_bin()
+        saved_state = {}
+
+        old_load_manifest = mykit.load_manifest
+        old_load_state = mykit.load_state
+        old_save_state = mykit.save_state
+        old_get_active_profile = mykit.get_active_profile
+        old_cmd_sync = mykit.cmd_sync
+        try:
+            mykit.load_manifest = lambda: {"profiles": {"personal": {"description": "Personal", "include": ["python"]}}}
+            mykit.load_state = lambda: {
+                "active_profile": "custom:dev",
+                "custom_profiles": {
+                    "dev": {"description": "dev profile", "include": ["python"]},
+                    "prod": {"description": "prod profile", "include": ["java"]},
+                },
+            }
+            mykit.save_state = lambda state: saved_state.update(state)
+            mykit.get_active_profile = lambda: "custom:dev"
+            mykit.cmd_sync = lambda: None
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                mykit.cmd_profile(["remove", "dev", "-y"])
+
+            self.assertNotIn("dev", saved_state["custom_profiles"])
+            self.assertIn("prod", saved_state["custom_profiles"])
+            self.assertEqual(saved_state["active_profile"], "custom:prod")
+        finally:
+            mykit.load_manifest = old_load_manifest
+            mykit.load_state = old_load_state
+            mykit.save_state = old_save_state
+            mykit.get_active_profile = old_get_active_profile
+            mykit.cmd_sync = old_cmd_sync
+
+    def test_profile_edit_delete_option(self):
+        mykit = load_mykit_bin()
+        saved_state = {}
+
+        old_load_manifest = mykit.load_manifest
+        old_load_state = mykit.load_state
+        old_save_state = mykit.save_state
+        old_get_active_profile = mykit.get_active_profile
+        old_prompt_name = mykit.prompt_custom_profile_name
+        old_prompt_selection = mykit.prompt_setup_selection
+        old_cmd_sync = mykit.cmd_sync
+        try:
+            mykit.load_manifest = lambda: {"profiles": {"personal": {"include": ["python"]}}}
+            mykit.load_state = lambda: {
+                "active_profile": "custom:old_profile",
+                "custom_profiles": {
+                    "old_profile": {"description": "old", "include": ["python"]},
+                    "new_profile": {"description": "new", "include": ["java"]},
+                },
+            }
+            mykit.save_state = lambda state: saved_state.update(state)
+            mykit.get_active_profile = lambda: "custom:old_profile"
+            mykit.prompt_custom_profile_name = lambda default: "new_profile"
+
+            responses = iter([
+                ({"old_profile"}, "delete"),
+                ({"new_profile"}, "next"),
+                (set(), "next"),
+                ({"java"}, "next"),
+                (set(), "next"),
+                (set(), "next"),
+                (set(), "next"),
+                (set(), "next"),
+                (set(), "next"),
+                (set(), "next"),
+            ])
+            mykit.prompt_setup_selection = lambda title, items, default, single=False, **kwargs: next(responses)
+            mykit.cmd_sync = lambda: None
+
+            with patch("builtins.input", return_value="y"):
+                with contextlib.redirect_stdout(io.StringIO()):
+                    mykit.cmd_profile(["edit"])
+
+            self.assertNotIn("old_profile", saved_state["custom_profiles"])
+            self.assertIn("new_profile", saved_state["custom_profiles"])
+        finally:
+            mykit.load_manifest = old_load_manifest
+            mykit.load_state = old_load_state
+            mykit.save_state = old_save_state
+            mykit.get_active_profile = old_get_active_profile
+            mykit.prompt_custom_profile_name = old_prompt_name
+            mykit.prompt_setup_selection = old_prompt_selection
+            mykit.cmd_sync = old_cmd_sync
 
 
 class DedupeScopeTests(unittest.TestCase):

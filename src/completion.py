@@ -21,7 +21,7 @@ _mykit() {
                 'setup:Choose or create profile, global skills, pruning, and MCPs'
                 'stats:View system analytics, token savings, and adapter connectivity'
                 'env:Interactive setup wizard for MCP API keys and secrets'
-                'stack:View, switch, or edit stack profiles'
+                'profile:View, switch, or edit profiles'
                 'mcp:View or toggle MCP servers (enable, disable)'
                 'install:Install optional skill to pwd (or --global)'
                 'remove:Remove optional skill from pwd (or --global)'
@@ -38,11 +38,11 @@ _mykit() {
             ;;
         args)
             case $words[2] in
-                stack)
+                profile|stack)
                     if [[ $#words -eq 3 ]]; then
-                        local -a stack_cmds
-                        stack_cmds=('use' 'set' 'list' 'edit')
-                        _describe -t stack_cmds 'stack command' stack_cmds
+                        local -a profile_cmds
+                        profile_cmds=('use' 'set' 'list' 'edit' 'remove' 'delete')
+                        _describe -t profile_cmds 'profile command' profile_cmds
                     fi
                     ;;
                 mcp)
@@ -98,7 +98,7 @@ _mykit_completions() {
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-    opts="list setup stats env stack mcp install remove sync prefetch reset update lint dedupe doctor completion"
+    opts="list setup stats env profile stack mcp install remove sync prefetch reset update lint dedupe doctor completion"
 
     if [ $COMP_CWORD -eq 1 ]; then
         COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
@@ -106,8 +106,8 @@ _mykit_completions() {
     fi
 
     case "${prev}" in
-        stack)
-            COMPREPLY=( $(compgen -W "use set list edit" -- ${cur}) )
+        profile|stack)
+            COMPREPLY=( $(compgen -W "use set list edit remove delete" -- ${cur}) )
             return 0
             ;;
         mcp)
