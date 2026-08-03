@@ -13,11 +13,14 @@ _mykit() {
             local -a commands
             commands=(
                 'list:Show status of MCPs, custom agents, core and optional skills'
+                'stats:View system analytics, token savings, and adapter connectivity'
+                'env:Interactive setup wizard for MCP API keys and secrets'
                 'stack:View or switch stack profiles (personal, work, full)'
                 'mcp:View or toggle MCP servers (enable, disable)'
                 'install:Install optional skill to pwd (or --global)'
                 'remove:Remove optional skill from pwd (or --global)'
                 'sync:Synchronize all skills, MCPs, and agents across adapters'
+                'reset:Reset all agent configs and symlinks cleanly'
                 'update:Update remote GitHub skills to latest commits'
                 'lint:Check skill frontmatter and symlink integrity (--fix)'
                 'dedupe:Detect semantic overlaps across skills'
@@ -44,10 +47,13 @@ _mykit() {
                         local -a mcp_cmds
                         mcp_cmds=('enable' 'disable' 'list')
                         _describe -t mcp_cmds 'mcp command' mcp_cmds
-                    elif [[ $#words -eq 4 ]]; then
-                        local -a mcps
-                        mcps=($(mykit_get_mcps))
-                        _describe -t mcps 'mcp server' mcps
+                    fi
+                    ;;
+                env)
+                    if [[ $#words -eq 3 ]]; then
+                        local -a env_cmds
+                        env_cmds=('setup')
+                        _describe -t env_cmds 'env command' env_cmds
                     fi
                     ;;
                 install|enable|remove|disable)
@@ -74,5 +80,3 @@ mykit_get_mcps() {
 mykit_get_optionals() {
     echo "db-helper ecc-suite mengto-skills prompt-architect"
 }
-
-_mykit "$@"

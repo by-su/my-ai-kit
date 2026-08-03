@@ -132,19 +132,10 @@ profiles:
       - "*"
 
 # 항상 자동 설치되는 Core 스크립트 & 스킬
-core:
-  - name: "core-git-workflow"
-    source: "local"
-    path: "core/git-workflow"
+core: []
 
 # 필요할 때 켜고 끌 수 있는 Optional 스킬
 optional:
-  - name: "db-helper"
-    description: "PostgreSQL & DB 마이그레이션 도우미"
-    source: "local"
-    path: "optional/db-helper"
-    default_enabled: true
-
   - name: "ecc-suite"
     description: "Everything Claude Code (스택 프로필 기반 맞춤형 스킬 팩)"
     source: "local"

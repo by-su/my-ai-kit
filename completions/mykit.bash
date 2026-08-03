@@ -6,7 +6,7 @@ _mykit_completions() {
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-    opts="list stack mcp install remove sync update lint dedupe doctor completion"
+    opts="list stats env stack mcp install remove sync reset update lint dedupe doctor completion"
 
     if [ $COMP_CWORD -eq 1 ]; then
         COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
@@ -20,6 +20,10 @@ _mykit_completions() {
             ;;
         mcp)
             COMPREPLY=( $(compgen -W "enable disable list context7 github google-docs google-slides mysql playwright memory brave-search" -- ${cur}) )
+            return 0
+            ;;
+        env)
+            COMPREPLY=( $(compgen -W "setup" -- ${cur}) )
             return 0
             ;;
         install|remove)
