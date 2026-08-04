@@ -146,6 +146,16 @@ profiles:
     include:
       - "*"
 
+  pm:
+    description: "PM / Product 스택 (PRD, User Story, Roadmap, PDLC)"
+    include:
+      - planning
+      - product
+      - research
+    enable_optionals:
+      - pm-skills
+      - pm-pdlc-conductor
+
 # 항상 자동 설치되는 Core 스크립트 & 스킬
 core: []
 

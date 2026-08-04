@@ -177,16 +177,43 @@ def get_custom_profiles(state):
             }
     return custom_profiles
 
-def save_custom_profile(state, name, keywords, description=None):
+def save_custom_profile(state, name, keywords, description=None, enable_optionals=None):
     custom_profiles = get_custom_profiles(state)
+    existing = custom_profiles.get(name, {})
     custom_profiles[name] = {
         "description": description or f"custom profile '{name}'",
         "include": sorted(keywords),
+        "enable_optionals": sorted(enable_optionals) if enable_optionals else existing.get("enable_optionals", []),
     }
     state["custom_profiles"] = custom_profiles
     state["active_profile"] = f"custom:{name}"
     state["custom_profile_name"] = name
     state["profile_keywords"] = sorted(keywords)
+
+def enable_optionals_for_profile(state, manifest, names):
+    """Globally enable the optional skills a profile declares via `enable_optionals`.
+
+    Returns the subset of `names` that were newly enabled (were not already on),
+    so callers can print a concise "just turned these on" message. Names that
+    don't resolve to a real manifest optional entry are silently skipped rather
+    than guessed at.
+    """
+    if not names:
+        return []
+    all_optionals = {item.get("name") for item in manifest.get("optional", [])}
+    enabled = set(state.get("enabled_optionals", []))
+    disabled = set(state.get("disabled_optionals", []))
+    newly_enabled = []
+    for name in names:
+        if name not in all_optionals:
+            continue
+        if name not in enabled:
+            newly_enabled.append(name)
+        enabled.add(name)
+        disabled.discard(name)
+    state["enabled_optionals"] = list(enabled)
+    state["disabled_optionals"] = list(disabled)
+    return newly_enabled
 
 def display_profile_name(profile_name):
     if profile_name.startswith("custom:"):
@@ -658,6 +685,8 @@ def cmd_profile(args):
                 desc = info.get("description", "")
                 print(f"  • \033[1;34m{name}\033[0m{current}: {desc}")
                 print_wrapped_field("Stacks", format_stack_summary(info.get("include", [])))
+                if info.get("enable_optionals"):
+                    print_wrapped_field("Auto-enable", ", ".join(sorted(info["enable_optionals"])))
         else:
             print("  (none - run \033[1mmykit profile edit\033[0m or \033[1mmykit setup\033[0m to create one)")
         print("\nTo switch profile: \033[1mmykit profile use <profile-name>\033[0m")
@@ -669,23 +698,9 @@ def cmd_profile(args):
             sys.exit(1)
         target_profile = args[1]
         if target_profile in custom_profiles:
-            save_custom_profile(
-                state,
-                target_profile,
-                custom_profiles[target_profile].get("include", []),
-                custom_profiles[target_profile].get("description", ""),
-            )
-            save_state(state)
-            target_profile = f"custom:{target_profile}"
+            source_profile = custom_profiles[target_profile]
         elif target_profile in profiles:
-            save_custom_profile(
-                state,
-                target_profile,
-                profiles[target_profile].get("include", []),
-                profiles[target_profile].get("description", ""),
-            )
-            save_state(state)
-            target_profile = f"custom:{target_profile}"
+            source_profile = profiles[target_profile]
         else:
             print(f"\033[1;31mError:\033[0m Profile '{target_profile}' not found")
             available = list(custom_profiles.keys())
@@ -694,7 +709,20 @@ def cmd_profile(args):
             print(f"Available profiles: {', '.join(available)}")
             sys.exit(1)
 
+        save_custom_profile(
+            state,
+            target_profile,
+            source_profile.get("include", []),
+            source_profile.get("description", ""),
+            source_profile.get("enable_optionals", []),
+        )
+        newly_enabled = enable_optionals_for_profile(state, manifest, source_profile.get("enable_optionals", []))
+        save_state(state)
+        target_profile = f"custom:{target_profile}"
+
         print(f"✅ Switched active profile to '\033[1;32m{display_profile_name(target_profile)}\033[0m'")
+        if newly_enabled:
+            print(f"  \033[1;36m→ Auto-enabled optional skills for this profile (global): {', '.join(newly_enabled)}\033[0m")
         cmd_sync()
     elif args[0] in ("edit", "customize", "add", "create", "new"):
         cmd_setup()

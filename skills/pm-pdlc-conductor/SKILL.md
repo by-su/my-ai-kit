@@ -45,6 +45,23 @@ the externally-fetched pm-skills repo (which varies by machine/fetch cache).
 - The user is only asking what this skill does or how PDLC/Triple Diamond
   works conceptually -- answer directly, no need to start a run.
 
+## Trigger examples
+
+Should trigger:
+
+- "우리 앱에 저장 검색 기능을 추가하고 싶어. 어떻게 진행해야 할까?"
+- "I have an idea for a new onboarding flow, where should I start as PM?"
+- "이번 스프린트에 뭘 해야 할지 모르겠어, PRD부터 다시 봐야 하나?"
+- "We just shipped the referral feature -- what should I look at next?"
+- "우리 프로젝트 지금 어느 단계야? Discover는 끝난 것 같은데."
+
+Should NOT trigger:
+
+- "run deliver-prd on the attached notes" (names a specific pm-skill directly)
+- "이 Triple Diamond가 정확히 뭐야?" (conceptual question, answer directly)
+- "fix the failing test in auth.py" (unrelated to PM/product work)
+- "리액트 훅 규칙 다시 설명해줘" (general coding question, unrelated)
+
 ## Prerequisite check
 
 Before recommending any downstream skill, confirm the phase skills

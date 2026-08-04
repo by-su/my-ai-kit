@@ -549,6 +549,38 @@ class SetupSelectionTests(unittest.TestCase):
             mykit.load_state = old_load_state
             mykit.get_active_profile = old_get_active_profile
 
+    def test_stack_list_shows_auto_enable_optionals(self):
+        mykit = load_mykit_bin()
+
+        old_load_manifest = mykit.load_manifest
+        old_load_state = mykit.load_state
+        old_get_active_profile = mykit.get_active_profile
+        try:
+            mykit.load_manifest = lambda: {"profiles": {}}
+            mykit.load_state = lambda: {
+                "active_profile": "custom:pm",
+                "custom_profiles": {
+                    "pm": {
+                        "description": "PM stack",
+                        "include": ["planning", "product"],
+                        "enable_optionals": ["pm-pdlc-conductor", "pm-skills"],
+                    }
+                },
+            }
+            mykit.get_active_profile = lambda: "custom:pm"
+
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                mykit.cmd_profile(["list"])
+
+            text = output.getvalue()
+            self.assertIn("Auto-enable", text)
+            self.assertIn("pm-pdlc-conductor, pm-skills", text)
+        finally:
+            mykit.load_manifest = old_load_manifest
+            mykit.load_state = old_load_state
+            mykit.get_active_profile = old_get_active_profile
+
     def test_profile_remove_deletes_profile(self):
         mykit = load_mykit_bin()
         saved_state = {}
@@ -577,6 +609,97 @@ class SetupSelectionTests(unittest.TestCase):
             self.assertNotIn("dev", saved_state["custom_profiles"])
             self.assertIn("prod", saved_state["custom_profiles"])
             self.assertEqual(saved_state["active_profile"], "custom:prod")
+        finally:
+            mykit.load_manifest = old_load_manifest
+            mykit.load_state = old_load_state
+            mykit.save_state = old_save_state
+            mykit.get_active_profile = old_get_active_profile
+            mykit.cmd_sync = old_cmd_sync
+
+    def test_enable_optionals_for_profile_enables_and_reports_new_names(self):
+        mykit = load_mykit_bin()
+
+        manifest = {"optional": [{"name": "pm-skills"}, {"name": "pm-pdlc-conductor"}, {"name": "unrelated"}]}
+        state = {"enabled_optionals": ["pm-skills"], "disabled_optionals": ["pm-pdlc-conductor"]}
+
+        newly_enabled = mykit.enable_optionals_for_profile(
+            state, manifest, ["pm-skills", "pm-pdlc-conductor", "not-a-real-skill"]
+        )
+
+        self.assertEqual(newly_enabled, ["pm-pdlc-conductor"])
+        self.assertEqual(set(state["enabled_optionals"]), {"pm-skills", "pm-pdlc-conductor"})
+        self.assertNotIn("pm-pdlc-conductor", state["disabled_optionals"])
+        self.assertNotIn("not-a-real-skill", state["enabled_optionals"])
+
+    def test_profile_use_template_auto_enables_configured_optionals(self):
+        mykit = load_mykit_bin()
+        saved_state = {}
+
+        old_load_manifest = mykit.load_manifest
+        old_load_state = mykit.load_state
+        old_save_state = mykit.save_state
+        old_get_active_profile = mykit.get_active_profile
+        old_cmd_sync = mykit.cmd_sync
+        try:
+            mykit.load_manifest = lambda: {
+                "optional": [{"name": "pm-skills"}, {"name": "pm-pdlc-conductor"}],
+                "profiles": {
+                    "pm": {
+                        "description": "PM stack",
+                        "include": ["planning", "product"],
+                        "enable_optionals": ["pm-skills", "pm-pdlc-conductor"],
+                    }
+                },
+            }
+            mykit.load_state = lambda: {"active_profile": "personal", "enabled_optionals": []}
+            mykit.save_state = lambda state: saved_state.update(state)
+            mykit.get_active_profile = lambda: "personal"
+            mykit.cmd_sync = lambda: None
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                mykit.cmd_profile(["use", "pm"])
+
+            self.assertIn("pm-skills", saved_state["enabled_optionals"])
+            self.assertIn("pm-pdlc-conductor", saved_state["enabled_optionals"])
+        finally:
+            mykit.load_manifest = old_load_manifest
+            mykit.load_state = old_load_state
+            mykit.save_state = old_save_state
+            mykit.get_active_profile = old_get_active_profile
+            mykit.cmd_sync = old_cmd_sync
+
+    def test_profile_use_custom_profile_auto_enables_configured_optionals(self):
+        mykit = load_mykit_bin()
+        saved_state = {}
+
+        old_load_manifest = mykit.load_manifest
+        old_load_state = mykit.load_state
+        old_save_state = mykit.save_state
+        old_get_active_profile = mykit.get_active_profile
+        old_cmd_sync = mykit.cmd_sync
+        try:
+            mykit.load_manifest = lambda: {"optional": [{"name": "pm-skills"}, {"name": "pm-pdlc-conductor"}]}
+            mykit.load_state = lambda: {
+                "active_profile": "custom:other",
+                "enabled_optionals": [],
+                "custom_profiles": {
+                    "pm": {
+                        "description": "custom pm",
+                        "include": ["planning", "product"],
+                        "enable_optionals": ["pm-skills", "pm-pdlc-conductor"],
+                    },
+                    "other": {"description": "other", "include": []},
+                },
+            }
+            mykit.save_state = lambda state: saved_state.update(state)
+            mykit.get_active_profile = lambda: "custom:other"
+            mykit.cmd_sync = lambda: None
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                mykit.cmd_profile(["use", "pm"])
+
+            self.assertIn("pm-skills", saved_state["enabled_optionals"])
+            self.assertIn("pm-pdlc-conductor", saved_state["enabled_optionals"])
         finally:
             mykit.load_manifest = old_load_manifest
             mykit.load_state = old_load_state
