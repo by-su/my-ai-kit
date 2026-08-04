@@ -118,4 +118,4 @@ mykit reset && mykit sync
 
 ## 🛡️ 7. 안전 명령어 자동 승인 (Auto-Approve Commands)
 
-`git`, `ls`, `cat`, `grep`, `python3`, `npm test` 등 21개 안전 명령어는 매번 사람이 승인 버튼을 누르지 않아도 **모든 에이전트에서 자동 실행**됩니다. ([`manifest.yaml`](file:///Users/bysu/workspace/my-ai-kit/manifest.yaml)에서 커스텀 변경 가능)
+`git`, `ls`, `cat`, `grep`, `python3`, `npm test` 등 21개 안전 명령어는 Claude Code와 Antigravity CLI에서 명령어 단위 allowlist로 자동 실행됩니다. Codex CLI는 명령어 단위 승인 목록을 지원하지 않아, 대신 `sandbox_mode`/`approval_policy` 설정으로 승인 빈도를 조절합니다. ([`manifest.yaml`](file:///Users/bysu/workspace/my-ai-kit/manifest.yaml)에서 커스텀 변경 가능)

@@ -44,7 +44,10 @@ auto_dedupe_on_install: true  # <--- 스킬 설치 시 자동 중복 스캔 훅
 
 ## 🛡️ 안전 명령어 자동 승인 (Auto-Approve Safe Commands)
 
-매번 터미널 명령어를 실행할 때마다 사람이 승인 버튼을 누르지 않아도 되도록, **안전한 읽기/조회/빌드/테스트 명령어**를 모든 에이전트(Claude Code, Antigravity, Gemini, Codex)에 자동 승인으로 일괄 등록합니다.
+매번 터미널 명령어를 실행할 때마다 사람이 승인 버튼을 누르지 않아도 되도록, `manifest.yaml`의 `auto_approve_commands` 목록을 각 에이전트에 동기화합니다. 다만 에이전트마다 승인 메커니즘이 달라 동작 방식이 다릅니다:
+
+- **Claude Code / Antigravity CLI**: 명령어별 allowlist를 지원하므로, 목록의 각 명령어가 `~/.claude/settings.json`(`Bash(git:*)` 패턴) 및 `~/.gemini/antigravity-cli/settings.json`(`command(git)` 패턴)의 `permissions.allow`에 실제로 등록됩니다.
+- **Codex CLI**: 명령어 단위 allowlist 기능이 없어, 대신 `manifest.yaml`의 `global.codex.sandbox_mode`/`approval_policy` 값을 `~/.codex/config.toml`에 동기화해 승인 빈도 자체를 조절합니다(`approval_policy: "never"`로 바꾸면 프롬프트를 완전히 끌 수 있습니다).
 
 ---
 

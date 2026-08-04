@@ -98,6 +98,12 @@ global:
         BRAVE_API_KEY: "${BRAVE_API_KEY}"
       enabled: true
 
+  # Codex CLI는 명령어 단위 승인 목록이 없고 sandbox_mode + approval_policy로만 위험도를 제어합니다.
+  # approval_policy를 "never"로 바꾸면 승인 프롬프트를 완전히 끌 수 있습니다(비권장).
+  codex:
+    sandbox_mode: "workspace-write"
+    approval_policy: "on-request"
+
 # 스택 프로필 정의 (개인용 / 회사용 / 전체 모드)
 profiles:
   personal:

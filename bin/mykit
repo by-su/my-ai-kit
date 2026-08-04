@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import sys
 import os
+import json
 import shutil
 import unicodedata
 import re
@@ -23,7 +24,8 @@ from src.symlink import (
 )
 from src.fetcher import fetch_skill_repo, update_skill_repo
 from src.mcp import sync_mcp_servers, check_mcp_health, get_mcp_states, MCP_TARGETS
-from src.permissions import sync_auto_approve_permissions
+from src.permissions import sync_auto_approve_permissions, sync_session_hooks
+from src.sessions import record_session_start, record_session_end, list_active_sessions
 from src.linter import run_linter
 from src.dedupe import run_dedupe
 from src.pruner import prune_skills_for_profile, prune_mengto_skills_for_profile, prune_pack_agents_for_profile
@@ -872,8 +874,9 @@ def cmd_sync(include_all=False):
     # 4. Sync MCPs
     mcp_results = sync_mcp_servers()
 
-    # 5. Sync Permissions (Auto-approve commands)
+    # 5. Sync Permissions (Auto-approve commands) and session-tracking hooks
     perm_results = sync_auto_approve_permissions()
+    perm_results.append(sync_session_hooks())
 
     # 6. Sync symlinks (both global & pwd local skills + custom agents)
     results = sync_active_skills(cwd=Path.cwd())
@@ -967,9 +970,36 @@ def cmd_doctor():
         agents_cnt = len(list(ag_dir.glob("*")))
         print(f"✓ Adapter [{adapter.name}] -> Skills: {skills_cnt} item(s) ({g_dir}) | Custom Agents: {agents_cnt} item(s) ({ag_dir})")
 
+def cmd_session_hook(event):
+    try:
+        payload = json.load(sys.stdin)
+    except Exception:
+        payload = {}
+    session_id = payload.get("session_id")
+    if not session_id:
+        return
+    if event == "start":
+        record_session_start(session_id, os.getppid())
+    elif event == "end":
+        record_session_end(session_id)
+
+
+def cmd_sessions():
+    sessions = list_active_sessions()
+    if not sessions:
+        print("No active sessions tracked.")
+        return
+    print(f"\033[1;36m--- Active Sessions ({len(sessions)}) ---\033[0m")
+    for session_id, info in sessions.items():
+        print(
+            f"  • {session_id[:8]}  pid={info.get('pid')}  "
+            f"profile=\033[1;32m{info.get('profile')}\033[0m  started={info.get('started_at')}"
+        )
+
+
 def main():
     if len(sys.argv) < 2:
-        print("Usage: mykit [list|setup|stats|env|mcp|profile|install|remove|sync|prefetch|reset|update|lint|dedupe|doctor|completion|bootstrap]")
+        print("Usage: mykit [list|setup|stats|env|mcp|profile|install|remove|sync|prefetch|reset|update|lint|dedupe|doctor|completion|bootstrap|sessions]")
         sys.exit(1)
 
     cmd = sys.argv[1]
@@ -1042,6 +1072,13 @@ def main():
         run_dedupe(threshold=threshold, focus_skill=focus_skill, include_all=include_all)
     elif cmd == "doctor":
         cmd_doctor()
+    elif cmd == "session-hook":
+        if len(sys.argv) < 3 or sys.argv[2] not in ("start", "end"):
+            print("Usage: mykit session-hook <start|end>")
+            sys.exit(1)
+        cmd_session_hook(sys.argv[2])
+    elif cmd == "sessions":
+        cmd_sessions()
     else:
         print(f"Unknown command: {cmd}")
         sys.exit(1)
