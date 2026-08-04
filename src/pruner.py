@@ -7,8 +7,8 @@ UNIVERSAL_UTILITIES = {
     'git', 'testing', 'security',
     'refactor', 'cleaner', 'verification', 'performance',
     'architecture', 'architect', 'quality', 'debug', 'skill-create',
-    'instinct', 'status', 'loop', 'tdd', 'mcp', 'prompt', 'clean', 'ui', 'design',
-    'write', 'writing', 'article', 'copywriting', 'post', 'docs', 'doc', 'readme', 'fix', 'x', 'codex',
+    'instinct', 'status', 'loop', 'tdd', 'mcp', 'prompt',
+    'docs', 'doc', 'readme', 'fix',
 }
 
 
@@ -37,20 +37,49 @@ UNIVERSAL_AGENTS = {
 }
 
 
+# Wizard shows a single "design" checkbox; selecting it must also pull in
+# "ui"-named skills (ui-demo, motion-ui, glass-dark-ui, ...) since those
+# don't contain the literal substring "design". Expansion happens only at
+# match time (get_profile_keywords) — the raw stored include list keeps
+# just "design", so profile summaries/lists still show one clean entry.
+ROLE_KEYWORD_EXPANSIONS = {
+    "design": ["design", "ui"],
+    "planning": ["planning", "plan"],
+}
+
+# Keywords longer than 3 chars that still need exact-token matching instead
+# of raw substring matching, because they collide with unrelated words that
+# happen to start with the same letters (e.g. "product" inside
+# "production-audit", "plan" inside "plankton-code-quality"). Global
+# substring matching is relied upon elsewhere (e.g. "next" matching
+# "nextjs-turbopack", "spring" matching "springboot-patterns"), so this is a
+# targeted exception rather than a blanket behavior change.
+TOKEN_EXACT_KEYWORDS = {"product", "plan"}
+
+def _expand_role_keywords(keywords):
+    expanded = list(keywords)
+    for kw in keywords:
+        for extra in ROLE_KEYWORD_EXPANSIONS.get(kw, []):
+            if extra not in expanded:
+                expanded.append(extra)
+    return expanded
+
 def get_profile_keywords(profile_name):
     state = load_state()
+    keywords = None
     if profile_name.startswith("custom:"):
         custom_name = profile_name.split(":", 1)[1]
         custom_profiles = state.get("custom_profiles", {})
         if custom_name in custom_profiles:
-            return custom_profiles[custom_name].get("include", [])
-    if profile_name.startswith("custom:") and "profile_keywords" in state:
-        return state.get("profile_keywords", [])
-
-    manifest = load_manifest()
-    profiles = manifest.get("profiles", {})
-    prof = profiles.get(profile_name, profiles.get("personal", {}))
-    return prof.get("include", [])
+            keywords = custom_profiles[custom_name].get("include", [])
+    if keywords is None and profile_name.startswith("custom:") and "profile_keywords" in state:
+        keywords = state.get("profile_keywords", [])
+    if keywords is None:
+        manifest = load_manifest()
+        profiles = manifest.get("profiles", {})
+        prof = profiles.get(profile_name, profiles.get("personal", {}))
+        keywords = prof.get("include", [])
+    return _expand_role_keywords(keywords)
 
 def is_skill_relevant(skill_name, profile_keywords):
     if "*" in profile_keywords:
@@ -62,15 +91,15 @@ def is_skill_relevant(skill_name, profile_keywords):
     # 1. Exact or keyword match against active stack profile
     for kw in profile_keywords:
         kw_lower = kw.lower()
-        if len(kw_lower) <= 3:
+        if len(kw_lower) <= 3 or kw_lower in TOKEN_EXACT_KEYWORDS:
             if kw_lower in parts:
                 return True
         elif kw_lower in lower_name:
             return True
-            
+
     # 2. Match against universal developer utilities
     for util in UNIVERSAL_UTILITIES:
-        if len(util) <= 3:
+        if len(util) <= 3 or util in TOKEN_EXACT_KEYWORDS:
             if util in parts:
                 return True
         elif util in lower_name:

@@ -149,6 +149,9 @@ SETUP_KEYWORD_CATEGORIES = {
     "AI & Data": [
         "langchain", "pytorch", "tensorflow", "openai", "huggingface"
     ],
+    "Role / Stage": [
+        "planning", "design", "development", "research", "product"
+    ],
 }
 
 SETUP_PROFILE_KEYWORDS = [kw for cat in SETUP_KEYWORD_CATEGORIES.values() for kw in cat]

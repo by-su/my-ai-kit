@@ -5,6 +5,7 @@ import contextlib
 import importlib.machinery
 import importlib.util
 import io
+from pathlib import Path
 
 import src.dedupe as dedupe
 import src.pruner as pruner
@@ -135,6 +136,13 @@ class SetupSelectionTests(unittest.TestCase):
         for keyword in ["go", "rust", "php", "ruby", "csharp", "cpp", "swift", "terraform"]:
             self.assertIn(keyword, keywords)
 
+    def test_setup_profile_keywords_include_role_stage_category(self):
+        mykit = load_mykit_bin()
+        keywords = mykit.get_setup_profile_keywords({"profiles": {}})
+
+        for keyword in ["planning", "design", "development", "research", "product"]:
+            self.assertIn(keyword, keywords)
+
     def test_custom_profile_name_is_normalized(self):
         mykit = load_mykit_bin()
 
@@ -164,6 +172,7 @@ class SetupSelectionTests(unittest.TestCase):
         seen_titles = []
         responses = iter([
             ({"python"}, "next"),
+            (set(), "next"),
             (set(), "next"),
             (set(), "next"),
             (set(), "next"),
@@ -217,6 +226,7 @@ class SetupSelectionTests(unittest.TestCase):
                 "Languages and stacks (Databases & ORMs)",
                 "Languages and stacks (DevOps & Cloud)",
                 "Languages and stacks (AI & Data)",
+                "Languages and stacks (Role / Stage)",
                 "Global optional skills to enable",
                 "MCP servers to enable",
             ])
@@ -241,6 +251,7 @@ class SetupSelectionTests(unittest.TestCase):
             (set(), "next"),
             (set(), "next"),
             ({"python"}, "next"),
+            (set(), "next"),
             (set(), "next"),
             (set(), "next"),
             (set(), "next"),
@@ -294,6 +305,7 @@ class SetupSelectionTests(unittest.TestCase):
                 "Languages and stacks (Databases & ORMs)",
                 "Languages and stacks (DevOps & Cloud)",
                 "Languages and stacks (AI & Data)",
+                "Languages and stacks (Role / Stage)",
                 "Global optional skills to enable",
                 "MCP servers to enable",
             ])
@@ -316,6 +328,7 @@ class SetupSelectionTests(unittest.TestCase):
             (set(), "next"),
             (set(), "next"),
             ({"python"}, "next"),
+            (set(), "next"),
             (set(), "next"),
             (set(), "next"),
             (set(), "next"),
@@ -364,6 +377,7 @@ class SetupSelectionTests(unittest.TestCase):
                 "Languages and stacks (Databases & ORMs)",
                 "Languages and stacks (DevOps & Cloud)",
                 "Languages and stacks (AI & Data)",
+                "Languages and stacks (Role / Stage)",
                 "Global optional skills to enable",
                 "MCP servers to enable",
             ])
@@ -410,6 +424,7 @@ class SetupSelectionTests(unittest.TestCase):
                 ({"python"}, "next"),
                 (set(), "next"),
                 ({"fastapi"}, "next"),
+                (set(), "next"),
                 (set(), "next"),
                 (set(), "next"),
                 (set(), "next"),
@@ -474,6 +489,7 @@ class SetupSelectionTests(unittest.TestCase):
                 ({"web-server"}, "next"),
                 ({"python"}, "next"),
                 ({"react"}, "next"),
+                (set(), "next"),
                 (set(), "next"),
                 (set(), "next"),
                 (set(), "next"),
@@ -604,6 +620,7 @@ class SetupSelectionTests(unittest.TestCase):
                 (set(), "next"),
                 (set(), "next"),
                 (set(), "next"),
+                (set(), "next"),
             ])
             mykit.prompt_setup_selection = lambda title, items, default, single=False, **kwargs: next(responses)
             mykit.cmd_sync = lambda: None
@@ -660,6 +677,195 @@ class PrunerTests(unittest.TestCase):
             self.assertEqual(pruner.get_profile_keywords("custom:backend"), ["go"])
         finally:
             pruner.load_state = old_load_state
+
+    def test_design_keyword_expands_to_also_match_ui_skills(self):
+        old_load_state = pruner.load_state
+        try:
+            pruner.load_state = lambda: {
+                "custom_profiles": {"frontend": {"include": ["design"]}},
+            }
+
+            keywords = pruner.get_profile_keywords("custom:frontend")
+            self.assertIn("design", keywords)
+            self.assertIn("ui", keywords)
+        finally:
+            pruner.load_state = old_load_state
+
+    def test_design_not_universally_included_without_role_keyword(self):
+        # Regression guard: "design"/"ui" must not silently match for every
+        # profile the way they used to before being removed from
+        # UNIVERSAL_UTILITIES.
+        self.assertFalse(pruner.is_skill_relevant("design-system", []))
+        self.assertTrue(pruner.is_skill_relevant("design-system", ["design"]))
+        self.assertTrue(pruner.is_skill_relevant("ui-demo", ["design", "ui"]))
+        self.assertFalse(pruner.is_skill_relevant("ui-demo", []))
+
+    def test_design_keyword_does_not_leak_into_production_skills(self):
+        # "design" must not collide with unrelated "production-*" skills the
+        # way a naive substring match on "product" once did.
+        self.assertFalse(pruner.is_skill_relevant("production-audit", ["design"]))
+
+    def test_design_keyword_known_accepted_gamedev_leak(self):
+        # Accepted, opt-in imprecision: selecting "design" also matches a
+        # couple of mengto game-development skill names. Documented here so
+        # it isn't mistaken for a regression later.
+        self.assertTrue(pruner.is_skill_relevant("design-action-combat", ["design"]))
+
+    def test_product_keyword_uses_exact_token_match_not_substring(self):
+        # "product" is a real Role/Stage keyword now, but substring matching
+        # would collide with "production-audit"/"production-scheduling" the
+        # same way "post" once collided with "postgres-patterns". It must
+        # use exact-token matching instead.
+        self.assertTrue(pruner.is_skill_relevant("product-capability", ["product"]))
+        self.assertTrue(pruner.is_skill_relevant("product-lens", ["product"]))
+        self.assertFalse(pruner.is_skill_relevant("production-audit", ["product"]))
+        self.assertFalse(pruner.is_skill_relevant("production-scheduling", ["product"]))
+
+    def test_planning_keyword_expands_to_also_match_plan_prefixed_skills(self):
+        old_load_state = pruner.load_state
+        try:
+            pruner.load_state = lambda: {
+                "custom_profiles": {"pm": {"include": ["planning"]}},
+            }
+
+            keywords = pruner.get_profile_keywords("custom:pm")
+            self.assertIn("planning", keywords)
+            self.assertIn("plan", keywords)
+            self.assertTrue(pruner.is_skill_relevant("plan-canvas", keywords))
+            self.assertTrue(pruner.is_skill_relevant("plan-orchestrate", keywords))
+        finally:
+            pruner.load_state = old_load_state
+
+    def test_plan_keyword_uses_exact_token_match_not_substring(self):
+        # "plan" must not collide with words that merely start with "plan"
+        # (e.g. "plankton"), the same way "post" once collided with
+        # "postgres". Uses a synthetic name with no other UNIVERSAL_UTILITIES
+        # substring, to isolate the "plan" check from unrelated matches
+        # (the real skill "plankton-code-quality" also contains "quality",
+        # which independently matches via UNIVERSAL_UTILITIES).
+        self.assertFalse(pruner.is_skill_relevant("plankton-visualizer", ["plan"]))
+
+    def test_existing_stack_keywords_still_match_compound_framework_names(self):
+        # Regression guard for the decision NOT to switch all keyword
+        # matching to exact-token: many existing stack keywords rely on
+        # substring matching to catch compound framework/word-form names
+        # that don't have a hyphen separator (discovered by diffing
+        # substring vs. token-exact matching across the real keyword set
+        # before deciding to scope the fix to just "product"/"plan").
+        self.assertTrue(pruner.is_skill_relevant("nextjs-turbopack", ["next"]))
+        self.assertTrue(pruner.is_skill_relevant("nodejs-keccak256", ["node"]))
+        self.assertTrue(pruner.is_skill_relevant("nuxt4-patterns", ["nuxt"]))
+        self.assertTrue(pruner.is_skill_relevant("springboot-patterns", ["spring"]))
+        self.assertTrue(pruner.is_skill_relevant("swiftui-patterns", ["swift"]))
+        self.assertTrue(pruner.is_skill_relevant("tailwindcss", ["tailwind"]))
+        self.assertTrue(pruner.is_skill_relevant("architecture-decision-records", ["architect"]))
+        self.assertTrue(pruner.is_skill_relevant("agent-introspection-debugging", ["debug"]))
+        self.assertTrue(pruner.is_skill_relevant("autonomous-loops", ["loop"]))
+        self.assertTrue(pruner.is_skill_relevant("video-to-superprompt", ["prompt"]))
+
+    def test_expand_role_keywords_does_not_duplicate_or_mutate_input(self):
+        original = ["design", "ui", "go"]
+        expanded = pruner._expand_role_keywords(original)
+        self.assertEqual(original, ["design", "ui", "go"])  # input untouched
+        self.assertEqual(expanded.count("ui"), 1)
+        self.assertEqual(expanded.count("design"), 1)
+        self.assertEqual(sorted(expanded), ["design", "go", "ui"])
+
+    def test_get_profile_keywords_expands_manifest_named_profile_too(self):
+        old_load_state = pruner.load_state
+        old_load_manifest = pruner.load_manifest
+        try:
+            pruner.load_state = lambda: {}
+            pruner.load_manifest = lambda: {
+                "profiles": {"designer": {"include": ["design"]}},
+            }
+            keywords = pruner.get_profile_keywords("designer")
+            self.assertIn("design", keywords)
+            self.assertIn("ui", keywords)
+        finally:
+            pruner.load_state = old_load_state
+            pruner.load_manifest = old_load_manifest
+
+    def test_get_profile_keywords_legacy_state_profile_keywords_also_expands(self):
+        old_load_state = pruner.load_state
+        try:
+            pruner.load_state = lambda: {
+                "profile_keywords": ["planning"],
+            }
+            keywords = pruner.get_profile_keywords("custom:legacy")
+            self.assertIn("planning", keywords)
+            self.assertIn("plan", keywords)
+        finally:
+            pruner.load_state = old_load_state
+
+    def test_prune_skills_for_profile_end_to_end_with_role_keywords(self):
+        import tempfile
+        old_load_state = pruner.load_state
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                tmp_path = Path(tmp)
+                ecc_base = tmp_path / "ecc_base"
+                (ecc_base / "skills" / "design-system").mkdir(parents=True)
+                (ecc_base / "skills" / "product-lens").mkdir(parents=True)
+                (ecc_base / "skills" / "go-service").mkdir(parents=True)
+                target = tmp_path / "target"
+
+                pruner.load_state = lambda: {
+                    "custom_profiles": {"role": {"include": ["design", "product"]}},
+                }
+                included, excluded = pruner.prune_skills_for_profile(ecc_base, target, "custom:role")
+                self.assertIn("design-system", included)
+                self.assertIn("product-lens", included)
+                self.assertIn("go-service", excluded)
+                self.assertTrue((target / "design-system").exists())
+                self.assertTrue((target / "product-lens").exists())
+                self.assertFalse((target / "go-service").exists())
+
+                pruner.load_state = lambda: {
+                    "custom_profiles": {"backend": {"include": ["go"]}},
+                }
+                included2, excluded2 = pruner.prune_skills_for_profile(ecc_base, target, "custom:backend")
+                self.assertIn("go-service", included2)
+                self.assertIn("design-system", excluded2)
+                self.assertIn("product-lens", excluded2)
+        finally:
+            pruner.load_state = old_load_state
+
+    def test_prune_mengto_skills_for_profile_end_to_end_with_role_keywords(self):
+        import tempfile
+        old_load_state = pruner.load_state
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                tmp_path = Path(tmp)
+                mengto_base = tmp_path / "mengto_base"
+                (mengto_base / "agent-skills" / "web-design" / "some-layout").mkdir(parents=True)
+                (mengto_base / "agent-skills" / "game-development" / "design-action-combat").mkdir(parents=True)
+                (mengto_base / "agent-skills" / "game-development" / "build-game-inventory").mkdir(parents=True)
+                target = tmp_path / "target"
+
+                pruner.load_state = lambda: {"custom_profiles": {"empty": {"include": []}}}
+                included, excluded = pruner.prune_mengto_skills_for_profile(mengto_base, target, "custom:empty")
+                # web-design category is always included regardless of keywords
+                self.assertIn("some-layout", included)
+                self.assertIn("build-game-inventory", excluded)
+                self.assertIn("design-action-combat", excluded)
+
+                pruner.load_state = lambda: {"custom_profiles": {"design": {"include": ["design"]}}}
+                included2, excluded2 = pruner.prune_mengto_skills_for_profile(mengto_base, target, "custom:design")
+                self.assertIn("design-action-combat", included2)  # known accepted leak
+                self.assertIn("build-game-inventory", excluded2)  # unrelated game skill still excluded
+        finally:
+            pruner.load_state = old_load_state
+
+    def test_unrelated_stack_excludes_design_skills(self):
+        self.assertFalse(pruner.is_skill_relevant("design-system", ["go"]))
+
+    def test_type_design_analyzer_always_included_via_universal_agents(self):
+        self.assertIn("type-design-analyzer", pruner.UNIVERSAL_AGENTS)
+        # Without the UNIVERSAL_AGENTS safety net, this agent name IS
+        # tech-stack-tied via the "design" token.
+        self.assertFalse(pruner.is_agent_profile_relevant("type-design-analyzer", []))
+        self.assertTrue(pruner.is_agent_profile_relevant("type-design-analyzer", ["design"]))
 
 
 class PruningPackPolicyTests(unittest.TestCase):
