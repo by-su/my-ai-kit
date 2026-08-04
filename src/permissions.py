@@ -148,6 +148,26 @@ def sync_session_hooks() -> str:
     return f"Configured session tracking hooks -> {CLAUDE_SETTINGS}"
 
 
+def merge_env_vars(existing: dict, new_env: dict) -> dict:
+    result = dict(existing)
+    env = dict(result.get("env", {}))
+    for key, value in new_env.items():
+        env.setdefault(key, value)
+    result["env"] = env
+    return result
+
+
+def sync_claude_env_vars() -> str:
+    manifest = load_manifest()
+    env_defaults = manifest.get("claude_env_defaults", {})
+    if not env_defaults:
+        return "No claude_env_defaults defined in manifest.yaml"
+    existing = read_json_file(CLAUDE_SETTINGS)
+    merged = merge_env_vars(existing, env_defaults)
+    write_json_file(CLAUDE_SETTINGS, merged)
+    return f"Configured {len(env_defaults)} default env var(s) -> {CLAUDE_SETTINGS}"
+
+
 def sync_auto_approve_permissions() -> list:
     manifest = load_manifest()
     cmds = manifest.get("auto_approve_commands", [])

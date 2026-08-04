@@ -24,7 +24,7 @@ from src.symlink import (
 )
 from src.fetcher import fetch_skill_repo, update_skill_repo
 from src.mcp import sync_mcp_servers, check_mcp_health, get_mcp_states, MCP_TARGETS
-from src.permissions import sync_auto_approve_permissions, sync_session_hooks
+from src.permissions import sync_auto_approve_permissions, sync_session_hooks, sync_claude_env_vars
 from src.sessions import record_session_start, record_session_end, list_active_sessions
 from src.linter import run_linter
 from src.dedupe import run_dedupe
@@ -875,6 +875,7 @@ def cmd_sync(include_all=False):
     # 5. Sync Permissions (Auto-approve commands) and session-tracking hooks
     perm_results = sync_auto_approve_permissions()
     perm_results.append(sync_session_hooks())
+    perm_results.append(sync_claude_env_vars())
 
     # 6. Sync symlinks (both global & pwd local skills + custom agents)
     results = sync_active_skills(cwd=Path.cwd())

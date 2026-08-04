@@ -197,6 +197,83 @@ class SyncAutoApprovePermissionsTests(unittest.TestCase):
                 permissions.CODEX_CONFIG = old_codex
 
 
+class MergeEnvVarsTests(unittest.TestCase):
+    def test_adds_new_key_to_empty_env(self):
+        result = permissions.merge_env_vars({}, {"GATEGUARD_DISABLED": "1"})
+
+        self.assertEqual(result["env"], {"GATEGUARD_DISABLED": "1"})
+
+    def test_preserves_unrelated_keys_and_existing_env(self):
+        existing = {"env": {"MAX_THINKING_TOKENS": "10000"}, "otherSetting": True}
+
+        result = permissions.merge_env_vars(existing, {"GATEGUARD_DISABLED": "1"})
+
+        self.assertEqual(
+            result["env"], {"MAX_THINKING_TOKENS": "10000", "GATEGUARD_DISABLED": "1"}
+        )
+        self.assertTrue(result["otherSetting"])
+
+    def test_does_not_overwrite_user_customized_value(self):
+        existing = {"env": {"GATEGUARD_DISABLED": "0"}}
+
+        result = permissions.merge_env_vars(existing, {"GATEGUARD_DISABLED": "1"})
+
+        self.assertEqual(result["env"]["GATEGUARD_DISABLED"], "0")
+
+    def test_does_not_mutate_input_dict(self):
+        existing = {"env": {"MAX_THINKING_TOKENS": "10000"}}
+
+        permissions.merge_env_vars(existing, {"GATEGUARD_DISABLED": "1"})
+
+        self.assertEqual(existing["env"], {"MAX_THINKING_TOKENS": "10000"})
+
+
+class SyncClaudeEnvVarsTests(unittest.TestCase):
+    def test_writes_manifest_env_defaults(self):
+        old_load_manifest = permissions.load_manifest
+        old_claude = permissions.CLAUDE_SETTINGS
+        with tempfile.TemporaryDirectory() as tmp:
+            permissions.load_manifest = lambda: {"claude_env_defaults": {"GATEGUARD_DISABLED": "1"}}
+            permissions.CLAUDE_SETTINGS = Path(tmp) / "settings.json"
+            try:
+                permissions.sync_claude_env_vars()
+
+                data = json.loads(permissions.CLAUDE_SETTINGS.read_text(encoding="utf-8"))
+                self.assertEqual(data["env"]["GATEGUARD_DISABLED"], "1")
+            finally:
+                permissions.load_manifest = old_load_manifest
+                permissions.CLAUDE_SETTINGS = old_claude
+
+    def test_reports_when_no_defaults_configured(self):
+        old_load_manifest = permissions.load_manifest
+        permissions.load_manifest = lambda: {}
+        try:
+            message = permissions.sync_claude_env_vars()
+            self.assertIn("No claude_env_defaults", message)
+        finally:
+            permissions.load_manifest = old_load_manifest
+
+    def test_running_twice_preserves_user_override(self):
+        old_load_manifest = permissions.load_manifest
+        old_claude = permissions.CLAUDE_SETTINGS
+        with tempfile.TemporaryDirectory() as tmp:
+            permissions.load_manifest = lambda: {"claude_env_defaults": {"GATEGUARD_DISABLED": "1"}}
+            permissions.CLAUDE_SETTINGS = Path(tmp) / "settings.json"
+            try:
+                permissions.sync_claude_env_vars()
+                data = json.loads(permissions.CLAUDE_SETTINGS.read_text(encoding="utf-8"))
+                data["env"]["GATEGUARD_DISABLED"] = "0"
+                permissions.write_json_file(permissions.CLAUDE_SETTINGS, data)
+
+                permissions.sync_claude_env_vars()
+
+                data = json.loads(permissions.CLAUDE_SETTINGS.read_text(encoding="utf-8"))
+                self.assertEqual(data["env"]["GATEGUARD_DISABLED"], "0")
+            finally:
+                permissions.load_manifest = old_load_manifest
+                permissions.CLAUDE_SETTINGS = old_claude
+
+
 class MergeHookEntriesTests(unittest.TestCase):
     def test_adds_hook_entry_to_empty_settings(self):
         result = permissions.merge_hook_entries({}, "SessionStart", "mykit session-hook start")

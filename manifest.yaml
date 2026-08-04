@@ -27,6 +27,12 @@ auto_approve_commands:
   - "pytest"
   - "mykit"
 
+# Claude Code 세션 기본 환경변수 (settings.json의 env로 동기화, 기존 값은 덮어쓰지 않음)
+# GateGuard fact-forcing 훅: 자체 A/B 테스트(gated vs ungated, 함수 단위 채점) 결과
+# 이 정도 복잡도의 태스크에서는 품질 차이가 없고 순수 마찰비용만 발생해 기본 비활성화합니다.
+claude_env_defaults:
+  GATEGUARD_DISABLED: "1"
+
 # 에이전트 공통 설정 / MCP 관리
 global:
   mcp_servers:

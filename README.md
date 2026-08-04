@@ -51,6 +51,21 @@ auto_dedupe_on_install: true  # <--- 스킬 설치 시 자동 중복 스캔 훅
 
 ---
 
+## ⚙️ Claude Code 세션 기본 환경변수 (`claude_env_defaults`)
+
+`manifest.yaml`의 `claude_env_defaults` 맵을 `mykit sync`/`mykit setup` 실행 시 `~/.claude/settings.json`의 `env`에 동기화합니다. 이미 값이 존재하는 키는 덮어쓰지 않고, 없는 키만 채워 넣습니다(사용자가 직접 바꾼 값은 항상 보존).
+
+```yaml
+claude_env_defaults:
+  GATEGUARD_DISABLED: "1"  # ECC의 GateGuard fact-forcing 훅 기본 비활성화
+```
+
+- ECC 플러그인에 포함된 GateGuard 훅은 Edit/Write/Bash 전에 "먼저 조사부터 하라"고 강제하는 fact-forcing 게이트입니다.
+- 자체 A/B 테스트(gated vs ungated, 함수 단위 채점, 게이트가 실제로 발동했는지 `~/.gateguard/state-*.json`으로 검증) 결과 현재 모델 기준으로는 품질 차이 없이 순수 지연만 발생해, 기본값으로 꺼두도록 설정했습니다.
+- 다시 켜고 싶다면 `~/.claude/settings.json`의 `env.GATEGUARD_DISABLED` 값을 지우거나 다른 값으로 바꾸면 됩니다 — 이후 `mykit sync`를 다시 돌려도 그 값은 덮어써지지 않습니다.
+
+---
+
 ## 📊 통계 대시보드 (`mykit stats`)
 
 내 맥북의 전체 AI 스킬 절감율, 예상 토큰 절약량, 에이전트 연결 현황을 한눈에 시각화합니다.
