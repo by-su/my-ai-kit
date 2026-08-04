@@ -849,9 +849,7 @@ def cmd_sync(include_all=False):
             fetch_skill_repo(name, url, commit_sha, auto_update=auto_update)
 
     # 2. Prune ECC suite according to active profile
-    ecc_fetched = Path("~/.agent-skills/store/fetched/ecc-suite").expanduser()
-    ecc_cache = Path("~/.claude/plugins/cache/ecc/ecc/2.0.0").expanduser()
-    ecc_base = ecc_fetched if ecc_fetched.exists() else ecc_cache
+    ecc_base = Path("~/.agent-skills/store/fetched/ecc-suite").expanduser()
     ecc_target = Path("~/.agent-skills/store/ecc-pruned-skills").expanduser()
     if "ecc-suite" in enabled_pruning_packs and ecc_base.exists():
         inc, exc = prune_skills_for_profile(ecc_base, ecc_target, active_profile)

@@ -4,7 +4,7 @@
   "skills": {
     "ecc-suite": {
       "url": "https://github.com/affaan-m/everything-claude-code.git",
-      "commit": "e4e4163101f162881e628f300a9ca4e6a940bcea"
+      "commit": "0c1d7be9a750627fb2a6534c78a998cc46d03f9c"
     },
     "prompt-architect": {
       "url": "https://github.com/ckelsoe/prompt-architect.git",

@@ -56,7 +56,7 @@ def show_stats():
     active_profile = get_active_profile()
     active_mcps, disabled_mcps = get_mcp_states()
     
-    ecc_base = Path("~/.claude/plugins/cache/ecc/ecc/2.0.0/skills").expanduser()
+    ecc_base = Path("~/.agent-skills/store/fetched/ecc-suite/skills").expanduser()
     ecc_total_cnt = len(list(ecc_base.glob("*"))) if ecc_base.exists() else 271
     
     pruned_dir = Path("~/.agent-skills/store/ecc-pruned-skills").expanduser()
