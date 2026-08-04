@@ -12,6 +12,9 @@ __pycache__/
 .gemini/skills/
 .codex/skills/
 
+# pm-pdlc-conductor per-initiative run state
+_pm-pdlc/
+
 # Secrets & Environment variables
 .env
 .env.*

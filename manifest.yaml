@@ -258,6 +258,13 @@ optional:
     auto_update: false
     default_enabled: false
 
+  - name: "pm-pdlc-conductor"
+    description: "pm-skills를 활용해 Triple Diamond PDLC(Discover~Iterate)로 PM 역할 수행을 안내하는 로컬 스킬"
+    source: "local"
+    path: "skills/pm-pdlc-conductor"
+    auto_update: false
+    default_enabled: false
+
 # 동기화할 에이전트 대상
 targets:
   claude_code: true
