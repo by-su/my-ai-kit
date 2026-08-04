@@ -163,8 +163,9 @@ class SetupSelectionTests(unittest.TestCase):
         saved_state = {}
         seen_titles = []
         responses = iter([
-            (set(), "next"),
             ({"python"}, "next"),
+            (set(), "next"),
+            (set(), "next"),
             (set(), "next"),
             (set(), "next"),
             (set(), "next"),
@@ -209,6 +210,7 @@ class SetupSelectionTests(unittest.TestCase):
                 mykit.cmd_setup()
 
             self.assertEqual(seen_titles, [
+                "Languages and stacks (Languages)",
                 "Languages and stacks (Frontend & Web)",
                 "Languages and stacks (Backend & Server)",
                 "Languages and stacks (Mobile)",
@@ -236,6 +238,7 @@ class SetupSelectionTests(unittest.TestCase):
         saved_state = {}
         seen_titles = []
         responses = iter([
+            (set(), "next"),
             (set(), "next"),
             ({"python"}, "next"),
             (set(), "next"),
@@ -284,6 +287,7 @@ class SetupSelectionTests(unittest.TestCase):
                 mykit.cmd_setup()
 
             self.assertEqual(seen_titles, [
+                "Languages and stacks (Languages)",
                 "Languages and stacks (Frontend & Web)",
                 "Languages and stacks (Backend & Server)",
                 "Languages and stacks (Mobile)",
@@ -309,6 +313,7 @@ class SetupSelectionTests(unittest.TestCase):
         saved_state = {}
         seen_titles = []
         responses = iter([
+            (set(), "next"),
             (set(), "next"),
             ({"python"}, "next"),
             (set(), "next"),
@@ -352,6 +357,7 @@ class SetupSelectionTests(unittest.TestCase):
                 mykit.cmd_setup()
 
             self.assertEqual(seen_titles, [
+                "Languages and stacks (Languages)",
                 "Languages and stacks (Frontend & Web)",
                 "Languages and stacks (Backend & Server)",
                 "Languages and stacks (Mobile)",
@@ -401,8 +407,9 @@ class SetupSelectionTests(unittest.TestCase):
             mykit.prompt_custom_profile_name = lambda default: "web-server"
             responses = iter([
                 ({"web-server"}, "next"),
+                ({"python"}, "next"),
                 (set(), "next"),
-                ({"python", "fastapi"}, "next"),
+                ({"fastapi"}, "next"),
                 (set(), "next"),
                 (set(), "next"),
                 (set(), "next"),
@@ -465,8 +472,9 @@ class SetupSelectionTests(unittest.TestCase):
             mykit.prompt_custom_profile_name = lambda default: "web-server"
             responses = iter([
                 ({"web-server"}, "next"),
+                ({"python"}, "next"),
+                ({"react"}, "next"),
                 (set(), "next"),
-                ({"python", "react"}, "next"),
                 (set(), "next"),
                 (set(), "next"),
                 (set(), "next"),
@@ -587,8 +595,9 @@ class SetupSelectionTests(unittest.TestCase):
             responses = iter([
                 ({"old_profile"}, "delete"),
                 ({"new_profile"}, "next"),
-                (set(), "next"),
                 ({"java"}, "next"),
+                (set(), "next"),
+                (set(), "next"),
                 (set(), "next"),
                 (set(), "next"),
                 (set(), "next"),

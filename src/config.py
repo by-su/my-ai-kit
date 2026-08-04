@@ -121,22 +121,24 @@ def save_local_state(state, cwd=None):
 
 
 SETUP_KEYWORD_CATEGORIES = {
+    "Languages": [
+        "typescript", "javascript", "python", "go", "rust", "java", "kotlin", "csharp", "cpp", "c", "php", "ruby", "swift", "dart"
+    ],
     "Frontend & Web": [
-        "typescript", "javascript", "react", "next", "vue", "nuxt", "svelte", "sveltekit", "angular", "astro", "remix", "tailwind", "electron"
+        "react", "next", "vue", "nuxt", "svelte", "sveltekit", "angular", "astro", "remix", "tailwind", "electron"
     ],
     "Backend & Server": [
         "node", "express", "nest", "fastify", "bun", "deno",
-        "python", "django", "fastapi", "flask", "celery",
-        "go", "gin", "fiber",
-        "rust", "actix", "axum",
-        "java", "kotlin", "springboot", "spring", "jpa", "ktor",
-        "csharp", "dotnet", "unity",
-        "php", "laravel", "symfony",
-        "ruby", "rails",
-        "c", "cpp"
+        "django", "fastapi", "flask", "celery",
+        "gin", "fiber",
+        "actix", "axum",
+        "springboot", "spring", "jpa", "ktor",
+        "dotnet", "unity",
+        "laravel", "symfony",
+        "rails"
     ],
     "Mobile": [
-        "react-native", "swift", "swiftui", "ios", "android", "flutter", "dart"
+        "react-native", "swiftui", "ios", "android", "flutter"
     ],
     "Databases & ORMs": [
         "postgres", "mysql", "sqlite", "mongodb", "redis", "prisma", "drizzle", "typeorm", "sqlalchemy", "elasticsearch", "supabase", "firebase"
