@@ -81,5 +81,5 @@ mykit_get_mcps() {
 }
 
 mykit_get_optionals() {
-    echo "db-helper ecc-suite mengto-skills prompt-architect app-store-screenshots spec-kit pm-skills"
+    echo "app-store-screenshots coolify copilotkit ecc-suite inspect-ai mengto-skills openui pm-pdlc-conductor pm-skills posthog prompt-architect promptfoo screenshot-to-code shadcn-ui spec-kit storybook"
 }

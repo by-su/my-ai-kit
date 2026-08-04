@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 from src.config import load_manifest, KIT_DIR
 
-ZSH_COMPLETION_SCRIPT = """#compdef mykit
+ZSH_COMPLETION_TEMPLATE = """#compdef mykit
 
 _mykit() {
     local curcontext="$curcontext" state line
@@ -86,11 +86,11 @@ mykit_get_mcps() {
 }
 
 mykit_get_optionals() {
-    echo "db-helper ecc-suite mengto-skills prompt-architect app-store-screenshots spec-kit pm-skills"
+    echo "__OPTIONAL_SKILLS__"
 }
 """
 
-BASH_COMPLETION_SCRIPT = """# bash completion for mykit
+BASH_COMPLETION_TEMPLATE = """# bash completion for mykit
 
 _mykit_completions() {
     local cur prev opts
@@ -119,7 +119,7 @@ _mykit_completions() {
             return 0
             ;;
         install|remove|prefetch)
-            COMPREPLY=( $(compgen -W "db-helper ecc-suite mengto-skills prompt-architect app-store-screenshots spec-kit pm-skills --global --all" -- ${cur}) )
+            COMPREPLY=( $(compgen -W "__OPTIONAL_SKILLS__ --global --all" -- ${cur}) )
             return 0
             ;;
         sync|update)
@@ -136,15 +136,31 @@ _mykit_completions() {
 complete -F _mykit_completions mykit
 """
 
+def get_optional_skill_names(manifest=None):
+    """Current `optional:` skill names from manifest.yaml, so completion never
+    hardcodes a list that can silently drift as skills are added/removed."""
+    if manifest is None:
+        manifest = load_manifest()
+    names = [item.get("name") for item in manifest.get("optional", []) if item.get("name")]
+    return sorted(names)
+
+def build_zsh_completion_script(optional_names):
+    return ZSH_COMPLETION_TEMPLATE.replace("__OPTIONAL_SKILLS__", " ".join(optional_names))
+
+def build_bash_completion_script(optional_names):
+    return BASH_COMPLETION_TEMPLATE.replace("__OPTIONAL_SKILLS__", " ".join(optional_names))
+
 def generate_completion(shell_type):
+    optional_names = get_optional_skill_names()
     if shell_type == "zsh":
-        print(ZSH_COMPLETION_SCRIPT.strip())
+        print(build_zsh_completion_script(optional_names).strip())
     elif shell_type == "bash":
-        print(BASH_COMPLETION_SCRIPT.strip())
+        print(build_bash_completion_script(optional_names).strip())
     elif shell_type == "install":
         install_completion()
 
 def install_completion():
+    optional_names = get_optional_skill_names()
     home = Path.home()
     zshrc = home / ".zshrc"
 
@@ -153,11 +169,11 @@ def install_completion():
 
     zsh_file = comp_dir / "_mykit"
     with open(zsh_file, 'w', encoding='utf-8') as f:
-        f.write(ZSH_COMPLETION_SCRIPT.strip())
+        f.write(build_zsh_completion_script(optional_names).strip())
 
     bash_file = comp_dir / "mykit.bash"
     with open(bash_file, 'w', encoding='utf-8') as f:
-        f.write(BASH_COMPLETION_SCRIPT.strip())
+        f.write(build_bash_completion_script(optional_names).strip())
 
     if zshrc.exists():
         lines = zshrc.read_text(encoding='utf-8', errors='ignore').splitlines()

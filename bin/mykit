@@ -180,10 +180,14 @@ def get_custom_profiles(state):
 def save_custom_profile(state, name, keywords, description=None, enable_optionals=None):
     custom_profiles = get_custom_profiles(state)
     existing = custom_profiles.get(name, {})
+    if enable_optionals is None:
+        resolved_enable_optionals = existing.get("enable_optionals", [])
+    else:
+        resolved_enable_optionals = sorted(enable_optionals)
     custom_profiles[name] = {
         "description": description or f"custom profile '{name}'",
         "include": sorted(keywords),
-        "enable_optionals": sorted(enable_optionals) if enable_optionals else existing.get("enable_optionals", []),
+        "enable_optionals": resolved_enable_optionals,
     }
     state["custom_profiles"] = custom_profiles
     state["active_profile"] = f"custom:{name}"
@@ -546,8 +550,12 @@ def cmd_setup():
         if item.get("name") in current_enabled_skills
         or (item.get("default_enabled", False) and item.get("name") not in current_disabled_skills)
     }
+    default_profile_enable_optionals = set(
+        custom_profiles.get(selected_profile, {}).get("enable_optionals", [])
+    )
     selections = {
         "profile_keywords": set(default_profile_keywords),
+        "profile_enable_optionals": set(default_profile_enable_optionals),
         "mcps": set(default_mcps),
         "skills": set(default_skills),
         "pruning_packs": set(get_enabled_pruning_packs(state)),
@@ -555,7 +563,7 @@ def cmd_setup():
 
     base_steps = ["profile"] if custom_profiles else []
     kw_steps = [f"kw_cat:{cat}" for cat in SETUP_KEYWORD_CATEGORIES]
-    rest_steps = ["skills", "pruning_packs", "mcps"]
+    rest_steps = ["skills", "profile_enable_optionals", "pruning_packs", "mcps"]
     step_keys = base_steps + kw_steps + rest_steps
 
     print("\033[1;36m--- mykit initial setup ---\033[0m")
@@ -577,6 +585,9 @@ def cmd_setup():
             items = profile_keywords
         elif key == "skills":
             title = "Global optional skills to enable"
+            items = optionals_by_name
+        elif key == "profile_enable_optionals":
+            title = "Auto-enable these skills whenever this profile is selected"
             items = optionals_by_name
         elif key == "pruning_packs":
             selected_prunable_skills = selections["skills"].intersection(PRUNABLE_PACKS)
@@ -640,9 +651,11 @@ def cmd_setup():
             elif selected_profile == "add":
                 custom_profile_name = prompt_custom_profile_name(custom_profile_name)
                 selections["profile_keywords"] = set()
+                selections["profile_enable_optionals"] = set()
             elif selected_profile in custom_profiles:
                 custom_profile_name = selected_profile
                 selections["profile_keywords"] = set(custom_profiles[selected_profile].get("include", []))
+                selections["profile_enable_optionals"] = set(custom_profiles[selected_profile].get("enable_optionals", []))
         elif key.startswith("kw_cat:"):
             cat_name = key.split(":", 1)[1]
             cat_kws = set(SETUP_KEYWORD_CATEGORIES.get(cat_name, []))
@@ -657,7 +670,12 @@ def cmd_setup():
             idx += 1
 
     if selected_profile == "add" or selected_profile in custom_profiles:
-        save_custom_profile(state, custom_profile_name, selections["profile_keywords"])
+        save_custom_profile(
+            state,
+            custom_profile_name,
+            selections["profile_keywords"],
+            enable_optionals=selections["profile_enable_optionals"],
+        )
     state["enabled_pruning_packs"] = sorted(selections["pruning_packs"])
     state["enabled_mcps"] = sorted(selections["mcps"])
     state["disabled_mcps"] = sorted(set(mcps_all.keys()) - selections["mcps"])

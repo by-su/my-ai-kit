@@ -181,6 +181,7 @@ class SetupSelectionTests(unittest.TestCase):
             (set(), "next"),
             (set(), "next"),
             (set(), "next"),
+            (set(), "next"),
         ])
 
         class MissingStateFile:
@@ -228,12 +229,79 @@ class SetupSelectionTests(unittest.TestCase):
                 "Languages and stacks (AI & Data)",
                 "Languages and stacks (Role / Stage)",
                 "Global optional skills to enable",
+                "Auto-enable these skills whenever this profile is selected",
                 "MCP servers to enable",
             ])
             self.assertEqual(saved_state["active_profile"], "custom:backend-api")
             self.assertEqual(saved_state["custom_profile_name"], "backend-api")
             self.assertEqual(saved_state["profile_keywords"], ["python"])
             self.assertEqual(saved_state["enabled_pruning_packs"], [])
+        finally:
+            mykit.load_manifest = old_load_manifest
+            mykit.load_state = old_load_state
+            mykit.save_state = old_save_state
+            mykit.STATE_FILE = old_state_file
+            mykit.prompt_custom_profile_name = old_prompt_name
+            mykit.prompt_setup_selection = old_prompt_selection
+            mykit.cmd_sync = old_cmd_sync
+
+    def test_setup_wizard_persists_profile_enable_optionals_selection(self):
+        mykit = load_mykit_bin()
+        saved_state = {}
+        seen_titles = []
+        responses = iter([
+            ({"python"}, "next"),
+            (set(), "next"),
+            (set(), "next"),
+            (set(), "next"),
+            (set(), "next"),
+            (set(), "next"),
+            (set(), "next"),
+            (set(), "next"),
+            ({"pm-skills"}, "next"),
+            ({"pm-skills", "pm-pdlc-conductor"}, "next"),
+            (set(), "next"),
+        ])
+
+        class MissingStateFile:
+            def exists(self):
+                return False
+
+        old_load_manifest = mykit.load_manifest
+        old_load_state = mykit.load_state
+        old_save_state = mykit.save_state
+        old_state_file = mykit.STATE_FILE
+        old_prompt_name = mykit.prompt_custom_profile_name
+        old_prompt_selection = mykit.prompt_setup_selection
+        old_cmd_sync = mykit.cmd_sync
+        try:
+            mykit.load_manifest = lambda: {
+                "optional": [
+                    {"name": "pm-skills", "description": "PM skills"},
+                    {"name": "pm-pdlc-conductor", "description": "PDLC conductor"},
+                ],
+                "global": {"mcp_servers": {}},
+            }
+            mykit.load_state = lambda: {}
+            mykit.save_state = lambda state: saved_state.update(state)
+            mykit.STATE_FILE = MissingStateFile()
+            mykit.prompt_custom_profile_name = lambda default: "pm"
+
+            def prompt_selection(title, items, default, single=False, **kwargs):
+                seen_titles.append(title)
+                return next(responses)
+
+            mykit.prompt_setup_selection = prompt_selection
+            mykit.cmd_sync = lambda: None
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                mykit.cmd_setup()
+
+            self.assertIn("Auto-enable these skills whenever this profile is selected", seen_titles)
+            self.assertEqual(
+                saved_state["custom_profiles"]["pm"]["enable_optionals"],
+                ["pm-pdlc-conductor", "pm-skills"],
+            )
         finally:
             mykit.load_manifest = old_load_manifest
             mykit.load_state = old_load_state
@@ -251,6 +319,7 @@ class SetupSelectionTests(unittest.TestCase):
             (set(), "next"),
             (set(), "next"),
             ({"python"}, "next"),
+            (set(), "next"),
             (set(), "next"),
             (set(), "next"),
             (set(), "next"),
@@ -307,6 +376,7 @@ class SetupSelectionTests(unittest.TestCase):
                 "Languages and stacks (AI & Data)",
                 "Languages and stacks (Role / Stage)",
                 "Global optional skills to enable",
+                "Auto-enable these skills whenever this profile is selected",
                 "MCP servers to enable",
             ])
             self.assertEqual(saved_state["active_profile"], "custom:personal")
@@ -328,6 +398,7 @@ class SetupSelectionTests(unittest.TestCase):
             (set(), "next"),
             (set(), "next"),
             ({"python"}, "next"),
+            (set(), "next"),
             (set(), "next"),
             (set(), "next"),
             (set(), "next"),
@@ -379,6 +450,7 @@ class SetupSelectionTests(unittest.TestCase):
                 "Languages and stacks (AI & Data)",
                 "Languages and stacks (Role / Stage)",
                 "Global optional skills to enable",
+                "Auto-enable these skills whenever this profile is selected",
                 "MCP servers to enable",
             ])
             self.assertEqual(saved_state["active_profile"], "custom:custom")
@@ -424,6 +496,7 @@ class SetupSelectionTests(unittest.TestCase):
                 ({"python"}, "next"),
                 (set(), "next"),
                 ({"fastapi"}, "next"),
+                (set(), "next"),
                 (set(), "next"),
                 (set(), "next"),
                 (set(), "next"),
@@ -489,6 +562,7 @@ class SetupSelectionTests(unittest.TestCase):
                 ({"web-server"}, "next"),
                 ({"python"}, "next"),
                 ({"react"}, "next"),
+                (set(), "next"),
                 (set(), "next"),
                 (set(), "next"),
                 (set(), "next"),
@@ -616,6 +690,30 @@ class SetupSelectionTests(unittest.TestCase):
             mykit.get_active_profile = old_get_active_profile
             mykit.cmd_sync = old_cmd_sync
 
+    def test_save_custom_profile_preserves_enable_optionals_when_not_passed(self):
+        mykit = load_mykit_bin()
+        state = {
+            "custom_profiles": {
+                "pm": {"description": "pm", "include": ["product"], "enable_optionals": ["pm-skills"]}
+            }
+        }
+
+        mykit.save_custom_profile(state, "pm", ["product", "planning"])
+
+        self.assertEqual(state["custom_profiles"]["pm"]["enable_optionals"], ["pm-skills"])
+
+    def test_save_custom_profile_clears_enable_optionals_when_passed_empty(self):
+        mykit = load_mykit_bin()
+        state = {
+            "custom_profiles": {
+                "pm": {"description": "pm", "include": ["product"], "enable_optionals": ["pm-skills"]}
+            }
+        }
+
+        mykit.save_custom_profile(state, "pm", ["product"], enable_optionals=[])
+
+        self.assertEqual(state["custom_profiles"]["pm"]["enable_optionals"], [])
+
     def test_enable_optionals_for_profile_enables_and_reports_new_names(self):
         mykit = load_mykit_bin()
 
@@ -735,6 +833,7 @@ class SetupSelectionTests(unittest.TestCase):
                 ({"old_profile"}, "delete"),
                 ({"new_profile"}, "next"),
                 ({"java"}, "next"),
+                (set(), "next"),
                 (set(), "next"),
                 (set(), "next"),
                 (set(), "next"),

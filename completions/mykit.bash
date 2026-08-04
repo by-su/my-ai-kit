@@ -27,7 +27,7 @@ _mykit_completions() {
             return 0
             ;;
         install|remove|prefetch)
-            COMPREPLY=( $(compgen -W "db-helper ecc-suite mengto-skills prompt-architect app-store-screenshots spec-kit pm-skills --global --all" -- ${cur}) )
+            COMPREPLY=( $(compgen -W "app-store-screenshots coolify copilotkit ecc-suite inspect-ai mengto-skills openui pm-pdlc-conductor pm-skills posthog prompt-architect promptfoo screenshot-to-code shadcn-ui spec-kit storybook --global --all" -- ${cur}) )
             return 0
             ;;
         sync|update)
