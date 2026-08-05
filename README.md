@@ -19,7 +19,8 @@
 | `mykit stats` | 시스템 전체 통계 대시보드 (스킬 감축률, 토큰 절약량, 에이전트 연결 현황) |
 | `mykit env setup` | MCP API 키 및 시크릿 인터랙티브 자동 대화형 등록 마법사 |
 | `mykit mcp` | 등록된 MCP 서버 활성화 상태 조회 및 토글 (`mykit mcp enable \| disable <mcp-name>`) |
-| `mykit profile` | 현재 프로필/폴더 바인딩 조회, 수정, 삭제 (`mykit profile use <profile>`는 지금 있는 폴더만 그 프로필에 적용(이동 없음), `--global`을 붙이면 이 컴퓨터의 전역 기본 프로필을 전환, `mykit profile bind/unbind`로 다른 폴더 바인딩, `mykit profile edit`, `mykit profile remove <profile>`) |
+| `mykit profile` | 현재 프로필/폴더 바인딩 조회, 수정, 삭제 (`mykit profile use <profile>`는 지금 있는 폴더만 그 프로필에 적용(이동 없음), `--global`을 붙이면 이 컴퓨터의 전역 기본 프로필을 전환, `--worktree`를 붙이면 git worktree를 만들어(또는 재사용해) 그 프로필을 바인딩, `mykit profile bind/unbind`로 다른 폴더 바인딩, `mykit profile edit`, `mykit profile remove <profile>`) |
+| `mykit sessions` | 현재 살아있는 mykit 세션(pid, 폴더, 프로필) 목록 조회 — 같은 폴더에서 프로필을 바꾸기 전 다른 세션이 그 폴더를 쓰고 있는지 확인할 때 사용 |
 | `mykit sync` | 활성 스킬만 lazy fetch한 뒤 스택 프로필, 안전 명령어, MCP, 서브 에이전트 동기화 |
 | `mykit sync --all` | 비활성 Optional까지 포함해 모든 GitHub 스킬을 명시적으로 fetch 후 동기화 |
 | `mykit prefetch <skill-name\|--all>` | Optional 스킬을 활성화하지 않고 미리 다운로드 |
@@ -134,6 +135,23 @@ mykit profile remove <profile-name>
 ```
 
 `mykit profile edit`는 profile 생성/수정 및 스킬/MCP 셋업을 진행하며, `mykit profile remove`는 지정한 커스텀 profile을 삭제합니다.
+
+### ⚠️ 같은 폴더에서 프로필을 동시에 여러 개 쓸 수 없는 이유
+
+`.claude/skills` 같은 로컬 스킬 디렉터리는 **폴더 하나당 물리적으로 하나**뿐입니다. 그래서 같은 폴더에서 세션 A(general)와 세션 B(pm)를 동시에 띄워놓고 B에서 `mykit profile use pm`을 실행하면, A가 쓰던 스킬 심볼릭 링크가 그 자리에서 pm 것으로 교체되어 **A도 같이 영향을 받습니다.** `mykit profile bind`로 다른 경로를 미리 등록해둬도 두 세션이 실제로 같은 폴더(cwd)에서 돌아가는 이상 소용없습니다 — 바인딩은 매핑일 뿐, 세션이 어디서 도는지는 안 바꿔주기 때문입니다.
+
+진짜로 동시에 다른 프로필을 쓰려면 각 세션이 **실제로 서로 다른 물리적 폴더**에서 돌아야 합니다. `--worktree` 플래그가 이 과정을 자동화합니다:
+
+```bash
+# git worktree를 자동 생성(또는 이미 있으면 재사용)하고 그 폴더를 profile에 바인딩
+mykit profile use pm --worktree              # 기본 경로: ~/.worktrees/<repo-name>/pm
+mykit profile use pm --worktree /my/path     # 경로 직접 지정
+
+# 만든 뒤에는 안내대로 그 폴더로 이동해서 sync
+cd ~/.worktrees/<repo-name>/pm && mykit sync
+```
+
+`--worktree`는 git 저장소에서만 동작하며(worktree는 git 기능이라 git이 아닌 폴더는 지원 불가), `--global`과는 함께 쓸 수 없습니다. `mykit profile use <profile>`을 플래그 없이 실행했는데 같은 폴더에서 다른 세션이 이미 감지되면, 그냥 경고만 하고 끝나는 게 아니라 **"대신 git worktree를 새로 만들어서 진행할까요? (y/N)"** 라고 직접 물어봅니다 — `y`를 누르면 즉시 worktree를 만들어 그쪽에 바인딩하고(현재 폴더는 건드리지 않음), `n`이나 그냥 엔터(비대화형 환경 포함)면 기존처럼 현재 폴더에 그대로 바인딩합니다. `mykit profile bind`나 `--worktree` 플래그 사용 시에는 (이미 격리된 경로를 다루는 흐름이라) 경고만 출력되고 계속 진행됩니다. 지금 살아있는 세션과 그 프로필을 확인하려면 `mykit sessions`를 사용하세요.
 
 ---
 

@@ -25,7 +25,8 @@ from src.symlink import (
 from src.fetcher import fetch_skill_repo, update_skill_repo
 from src.mcp import sync_mcp_servers, check_mcp_health, get_mcp_states, MCP_TARGETS
 from src.permissions import sync_auto_approve_permissions, sync_session_hooks, sync_claude_env_vars
-from src.sessions import record_session_start, record_session_end, list_active_sessions
+from src.sessions import record_session_start, record_session_end, list_active_sessions, get_sessions_for_path
+from src.worktree import ensure_worktree, WorktreeError
 from src.linter import run_linter
 from src.dedupe import run_dedupe
 from src.pruner import (
@@ -710,6 +711,49 @@ def resolve_profile_or_exit(target_profile, custom_profiles, profiles):
     print(f"Available profiles: {', '.join(available)}")
     sys.exit(1)
 
+def warn_active_sessions(path, same_cwd):
+    """Warn (non-blocking) if other Claude Code sessions are already active in `path`.
+
+    Switching a folder's profile rewrites the physical `.claude/skills` symlinks that
+    every session running with that cwd shares - there's no way to isolate this per
+    session, so the best we can do is surface it before it silently breaks someone.
+
+    Returns True if a warning was printed (i.e. a real conflict was found).
+    """
+    matches = get_sessions_for_path(path)
+    if same_cwd:
+        # This session's own SessionStart hook already recorded an entry for `path`,
+        # so exactly 1 match means "just me" - nothing to warn about.
+        if len(matches) <= 1:
+            return False
+    elif not matches:
+        return False
+
+    print(f"\033[1;33m⚠ {len(matches)} active session(s) found in '{path}':\033[0m")
+    for session_id, info in matches.items():
+        print(f"    • {session_id[:8]}  pid={info.get('pid')}  profile={info.get('profile')}  started={info.get('started_at')}")
+    print("  Claude Code shares one physical skill directory per folder, so this change will affect them too.")
+    print("  Binding alone won't fix this if both sessions keep working from this same folder - each session")
+    print("  must actually run from its own separate directory. Try: \033[1mmykit profile use <profile> --worktree\033[0m")
+    print("  (creates/reuses a git worktree and binds it), or bind an existing separate folder yourself:")
+    print("  \033[1mmykit profile bind <profile> <path>\033[0m")
+    return True
+
+def create_and_bind_worktree(state, resolved_id, cwd, explicit_path=None):
+    """Create/reuse a git worktree for `resolved_id` and bind it. Returns the bound
+    path, or None if worktree creation failed (error already printed)."""
+    try:
+        target_path, created = ensure_worktree(cwd, display_profile_name(resolved_id), explicit_path)
+    except WorktreeError as e:
+        print(f"\033[1;31mError:\033[0m {e}")
+        return None
+    warn_active_sessions(target_path, same_cwd=False)
+    bind_path_to_profile(state, resolved_id, target_path)
+    verb = "Created" if created else "Reusing existing"
+    print(f"✅ {verb} worktree '\033[1;36m{target_path}\033[0m' → profile '\033[1;32m{display_profile_name(resolved_id)}\033[0m'")
+    print(f"  Run 'cd {target_path} && mykit sync' to start using it there.")
+    return target_path
+
 def cmd_profile(args):
     manifest = load_manifest()
     profiles = manifest.get("profiles", {})
@@ -755,12 +799,17 @@ def cmd_profile(args):
         print("To switch this machine's own default profile instead: \033[1mmykit profile use <profile-name> --global\033[0m")
         print("To edit profile: \033[1mmykit profile edit\033[0m")
         print("To delete profile: \033[1mmykit profile remove <profile-name>\033[0m")
+        print("\033[90m⚠ Profiles apply per physical folder - concurrent sessions in the SAME folder share one skill set,")
+        print("  no matter how you bind. For real multi-profile concurrency, each session must actually run from its own")
+        print("  separate directory: \033[1mmykit profile use <profile-name> --worktree\033[0m creates/reuses a git worktree")
+        print("  for it automatically, or bind an existing separate folder yourself: mykit profile bind <profile> <path>.\033[0m")
     elif args[0] == "bind":
         if len(args) < 2:
             print("Usage: mykit profile bind <profile-name> [path]")
             sys.exit(1)
         resolved_id, _ = resolve_profile_or_exit(args[1], custom_profiles, profiles)
         bind_path = Path(args[2]).resolve() if len(args) > 2 else Path.cwd().resolve()
+        warn_active_sessions(bind_path, same_cwd=(bind_path == Path.cwd().resolve()))
         bind_path_to_profile(state, resolved_id, bind_path)
         print(f"✅ Bound '\033[1;36m{bind_path}\033[0m' → profile '\033[1;32m{display_profile_name(resolved_id)}\033[0m'")
         print("  (global active profile and global skill cache are untouched)")
@@ -782,10 +831,20 @@ def cmd_profile(args):
             print(f"No binding found for '{bind_path}'")
     elif args[0] in ("use", "set"):
         if len(args) < 2:
-            print("Usage: mykit profile use <profile_name> [--global]")
+            print("Usage: mykit profile use <profile_name> [--global] [--worktree [path]]")
             sys.exit(1)
         target_profile = args[1]
         resolved_id, source_profile = resolve_profile_or_exit(target_profile, custom_profiles, profiles)
+
+        worktree_requested = "--worktree" in args
+        worktree_path_arg = None
+        if worktree_requested:
+            wt_idx = args.index("--worktree")
+            if wt_idx + 1 < len(args) and not args[wt_idx + 1].startswith("--"):
+                worktree_path_arg = args[wt_idx + 1]
+            if "--global" in args:
+                print("Usage: --worktree can't be combined with --global (worktree binds a folder; --global changes the machine default).")
+                sys.exit(1)
 
         if "--global" in args:
             # Switch this machine's own default profile (e.g. "work laptop" vs "personal laptop").
@@ -803,9 +862,24 @@ def cmd_profile(args):
             if newly_enabled:
                 print(f"  \033[1;36m→ Auto-enabled optional skills globally: {', '.join(newly_enabled)}\033[0m")
             cmd_sync()
+        elif worktree_requested:
+            # Create/reuse a git worktree for this profile so it gets its own physical
+            # folder (and thus its own .claude/skills) instead of sharing this one.
+            if create_and_bind_worktree(state, resolved_id, Path.cwd(), worktree_path_arg) is None:
+                sys.exit(1)
         else:
             # Default: bind THIS folder to the profile in place (no move, no new folder).
             cwd = Path.cwd().resolve()
+            if warn_active_sessions(cwd, same_cwd=True):
+                print("\033[1;33mCreate a git worktree for this profile instead, so the other session(s) aren't affected? [y/N]\033[0m")
+                try:
+                    answer = input("> ").strip().lower()
+                except (EOFError, KeyboardInterrupt):
+                    answer = "n"
+                if answer in ("y", "yes"):
+                    if create_and_bind_worktree(state, resolved_id, cwd) is not None:
+                        return
+                    print("  Falling back to binding this folder in place instead.")
             bind_path_to_profile(state, resolved_id, cwd)
             print(f"✅ '\033[1;36m{cwd}\033[0m' → profile '\033[1;32m{display_profile_name(resolved_id)}\033[0m'")
             print("  (global default profile is untouched; use --global to switch this machine's own default instead)")
@@ -1092,7 +1166,7 @@ def cmd_session_hook(event):
     if not session_id:
         return
     if event == "start":
-        record_session_start(session_id, os.getppid())
+        record_session_start(session_id, os.getppid(), os.getcwd())
     elif event == "end":
         record_session_end(session_id)
 

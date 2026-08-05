@@ -42,7 +42,8 @@ source ~/.zshrc
 | `mykit reset` | 찌꺼기 심볼릭 링크 및 구버전 설정 100% 클린 리셋 | 초기화 |
 | `mykit stats` | 시스템 통계 대시보드 (스킬 감축률, 토큰 절약량, 에이전트 연결 현황) | 시각화 |
 | `mykit env setup` | MCP API 키 및 시크릿 인터랙티브 대화형 등록 마법사 | 키 세팅 |
-| `mykit profile` | 개발 프로필 조회, 전환, 수정 (`mykit profile use <profile>`, `mykit profile edit`) | 프로필 스위칭 |
+| `mykit profile` | 개발 프로필 조회, 전환, 수정 (`mykit profile use <profile>`, `--worktree`로 git worktree 자동 생성+바인딩, `mykit profile edit`) | 프로필 스위칭 |
+| `mykit sessions` | 현재 살아있는 mykit 세션(pid, 폴더, 프로필) 목록 조회 | 세션 확인 |
 | `mykit mcp` | MCP 서버 켜기/끄기 토글 (`mykit mcp enable \| disable <mcp-name>`) | MCP 관리 |
 | `mykit doctor` | MCP 헬스체크, 시크릿 키 검증, 에이전트 연결 상태 점검 | 진단 |
 | `mykit completion install` | Zsh / Bash 터미널 자동 완성(Tab Completion) 1초 등록 | 편의 기능 |
@@ -94,6 +95,28 @@ mykit profile use typescript
 ```
 
 다른(지금 있지 않은) 폴더를 특정 프로필에 미리 붙여두고 싶다면 `mykit profile bind <profile> [path]`, 해제는 `mykit profile unbind [path]`.
+
+> ⚠️ **같은 폴더에서 세션 두 개를 동시에 다른 프로필로 돌릴 수는 없습니다.** 로컬 스킬 디렉터리(`.claude/skills`)는 폴더당 하나뿐이라, 세션 A가 general로 열려있는데 세션 B(같은 폴더)에서 `mykit profile use pm`을 실행하면 A가 쓰던 스킬까지 그 자리에서 pm으로 교체됩니다. `mykit profile bind`로 다른 경로를 미리 등록해둬도, 두 세션이 실제로 같은 폴더에서 돌아가는 이상 도움이 안 됩니다.
+
+### 4-1-1. 진짜 동시 작업이 필요할 때 (`--worktree`)
+
+세션마다 실제로 다른 물리적 폴더가 필요하다면 git worktree를 씁니다. `--worktree`를 붙이면 자동으로 만들어(또는 이미 있으면 재사용해) 그 폴더를 프로필에 바인딩합니다.
+
+```bash
+mykit profile use pm --worktree              # 기본 경로: ~/.worktrees/<repo-name>/pm
+mykit profile use pm --worktree /my/path     # 경로 직접 지정
+
+cd ~/.worktrees/<repo-name>/pm && mykit sync # 안내대로 이동해서 sync
+```
+
+git 저장소가 아닌 폴더에서는 에러가 나며, `--global`과는 같이 쓸 수 없습니다.
+
+`mykit profile use <profile>`을 플래그 없이 실행했는데 같은 폴더에서 다른 세션이 이미 떠 있는 게 감지되면, 경고만 출력하고 끝나지 않고 **"대신 git worktree를 새로 만들어서 진행할까요? (y/N)"**라고 직접 물어봅니다.
+
+- `y` → 즉시 worktree를 만들어 그쪽에 바인딩(현재 폴더는 안 건드림), 안내에 따라 그 폴더로 이동해서 sync
+- `n` / 그냥 엔터 / 비대화형 환경 → 기존처럼 현재 폴더에 그대로 바인딩하고 진행
+
+(`mykit profile bind`나 `--worktree` 플래그를 직접 쓴 경우는 이미 격리된 경로를 다루는 흐름이라 경고만 뜨고 계속 진행됩니다.) 지금 어떤 세션이 어느 폴더/프로필로 떠 있는지는 `mykit sessions`로 확인하세요.
 
 ### 4-2. 회사 PC vs 개인 PC 프로필 스위칭 (`--global`)
 
