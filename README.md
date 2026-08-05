@@ -19,7 +19,7 @@
 | `mykit stats` | 시스템 전체 통계 대시보드 (스킬 감축률, 토큰 절약량, 에이전트 연결 현황) |
 | `mykit env setup` | MCP API 키 및 시크릿 인터랙티브 자동 대화형 등록 마법사 |
 | `mykit mcp` | 등록된 MCP 서버 활성화 상태 조회 및 토글 (`mykit mcp enable \| disable <mcp-name>`) |
-| `mykit profile` | 현재 프로필 조회, 전환, 수정, 삭제 (`mykit profile use <profile>`, `mykit profile edit`, `mykit profile remove <profile>`) |
+| `mykit profile` | 현재 프로필/폴더 바인딩 조회, 수정, 삭제 (`mykit profile use <profile>`는 지금 있는 폴더만 그 프로필에 적용(이동 없음), `--global`을 붙이면 이 컴퓨터의 전역 기본 프로필을 전환, `mykit profile bind/unbind`로 다른 폴더 바인딩, `mykit profile edit`, `mykit profile remove <profile>`) |
 | `mykit sync` | 활성 스킬만 lazy fetch한 뒤 스택 프로필, 안전 명령어, MCP, 서브 에이전트 동기화 |
 | `mykit sync --all` | 비활성 Optional까지 포함해 모든 GitHub 스킬을 명시적으로 fetch 후 동기화 |
 | `mykit prefetch <skill-name\|--all>` | Optional 스킬을 활성화하지 않고 미리 다운로드 |
@@ -117,9 +117,17 @@ mykit mcp disable mysql
 
 ## ⚡ 프로필 (Profiles) 관리
 
-회사 PC와 개인 PC의 개발 스택이 다르거나 270+ 스킬 전체를 전부 로드해야 할 때 프로필 한 줄로 유연하게 전환할 수 있습니다.
+개발 스택별로 필요한 스킬만 로드해 토큰 소비량을 줄일 수 있습니다. 두 가지 모드가 있습니다.
 
 ```bash
+# 폴더 전용 (기본): 지금 있는 폴더만 그 프로필에 적용, 전역 기본값은 그대로
+mykit profile use pm
+mykit profile bind <profile-name> [path]   # 다른(지금 있지 않은) 폴더를 프로필에 붙이기
+mykit profile unbind [path]
+
+# 이 컴퓨터의 전역 기본 프로필 전환 (회사 PC vs 개인 PC처럼 통째로 하나만 쓸 때)
+mykit profile use <profile-name> --global
+
 mykit profile
 mykit profile edit
 mykit profile remove <profile-name>

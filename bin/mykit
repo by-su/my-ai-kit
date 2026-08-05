@@ -28,7 +28,10 @@ from src.permissions import sync_auto_approve_permissions, sync_session_hooks, s
 from src.sessions import record_session_start, record_session_end, list_active_sessions
 from src.linter import run_linter
 from src.dedupe import run_dedupe
-from src.pruner import prune_skills_for_profile, prune_mengto_skills_for_profile, prune_pack_agents_for_profile
+from src.pruner import (
+    prune_skills_for_profile, prune_mengto_skills_for_profile, prune_pack_agents_for_profile,
+    profile_pack_dir,
+)
 from src.completion import generate_completion, install_completion
 from src.dashboard import setup_env_interactive, show_stats
 from src.setup import parse_setup_selection, run_multiselect
@@ -197,10 +200,8 @@ def save_custom_profile(state, name, keywords, description=None, enable_optional
 def enable_optionals_for_profile(state, manifest, names):
     """Globally enable the optional skills a profile declares via `enable_optionals`.
 
-    Returns the subset of `names` that were newly enabled (were not already on),
-    so callers can print a concise "just turned these on" message. Names that
-    don't resolve to a real manifest optional entry are silently skipped rather
-    than guessed at.
+    Used only by `mykit profile use --global`. Returns the subset of `names` that
+    were newly enabled, so callers can print a concise "just turned these on" message.
     """
     if not names:
         return []
@@ -218,6 +219,12 @@ def enable_optionals_for_profile(state, manifest, names):
     state["enabled_optionals"] = list(enabled)
     state["disabled_optionals"] = list(disabled)
     return newly_enabled
+
+def bind_path_to_profile(state, resolved_id, bind_path):
+    bindings = state.get("profile_bindings", {})
+    bindings[str(bind_path)] = resolved_id
+    state["profile_bindings"] = bindings
+    save_state(state)
 
 def display_profile_name(profile_name):
     if profile_name.startswith("custom:"):
@@ -241,13 +248,13 @@ def cmd_list(args=None):
     manifest = load_manifest()
     state = load_state()
     local_state = load_local_state()
-    active_profile = get_active_profile()
+    active_profile = get_active_profile(cwd=Path.cwd())
 
     target_query = args[0].lower() if args else None
 
     if target_query:
         if "mengto" in target_query:
-            mengto_dir = Path("~/.agent-skills/store/mengto-pruned-skills").expanduser()
+            mengto_dir = profile_pack_dir(active_profile, "mengto-skills")
             if not mengto_dir.exists():
                 mengto_dir = Path("~/.agent-skills/store/fetched/mengto-skills/agent-skills").expanduser()
             print(f"\033[1;36m🎨 [MengTo Skills Breakdown]\033[0m ({mengto_dir})\n")
@@ -265,7 +272,7 @@ def cmd_list(args=None):
             return
 
         if "ecc" in target_query:
-            ecc_dir = Path("~/.agent-skills/store/ecc-pruned-skills").expanduser()
+            ecc_dir = profile_pack_dir(active_profile, "ecc-suite")
             print(f"\033[1;36m⚡ [Everything Claude Code (ECC) Pruned Suite]\033[0m ({ecc_dir})\n")
             if ecc_dir.exists():
                 items = sorted([x.name for x in ecc_dir.iterdir() if x.is_dir()])
@@ -334,8 +341,8 @@ def cmd_list(args=None):
         is_glob = (name in global_enabled) or (is_default and name not in disabled_optionals)
         if not (is_loc or is_glob):
             continue
-        path = resolve_skill_path(item)
-        pack_agents = find_pack_agents(path, fetched_name=name) if path and path.exists() else []
+        path = resolve_skill_path(item, active_profile=active_profile)
+        pack_agents = find_pack_agents(path, fetched_name=name, active_profile=active_profile) if path and path.exists() else []
         if pack_agents:
             pack_agent_found = True
             print(f"  \033[90m[{name}]\033[0m \033[90m({len(pack_agents)} agents)\033[0m")
@@ -355,7 +362,7 @@ def cmd_list(args=None):
         for item in core_items:
             name = item.get("name")
             src = item.get("source", "local")
-            path = resolve_skill_path(item)
+            path = resolve_skill_path(item, active_profile=active_profile)
             auto_up = " \033[90m[auto-update]\033[0m" if item.get("auto_update") else ""
             status = "\033[1;32m✓\033[0m" if path and path.exists() else "\033[1;31m✗\033[0m"
             print(f"  {status} \033[1m{name}\033[0m \033[90m({src})\033[0m{auto_up}")
@@ -389,7 +396,7 @@ def cmd_list(args=None):
         else:
             status_str = "\033[90m⚪ Off\033[0m"
 
-        path = resolve_skill_path(item)
+        path = resolve_skill_path(item, active_profile=active_profile)
         sub_count = len(find_sub_skills(path)) if path and path.exists() else 0
         sub_str = f"{sub_count} skills" if sub_count > 1 else "-"
 
@@ -686,6 +693,23 @@ def cmd_setup():
     print("\n✓ Saved initial setup preferences.")
     cmd_sync()
 
+def resolve_profile_or_exit(target_profile, custom_profiles, profiles):
+    """Look up a profile name against custom profiles then manifest templates.
+
+    Returns (resolved_profile_id, source_profile_dict). Exits with an error
+    listing available profiles if no match is found.
+    """
+    if target_profile in custom_profiles:
+        return f"custom:{target_profile}", custom_profiles[target_profile]
+    if target_profile in profiles:
+        return target_profile, profiles[target_profile]
+    print(f"\033[1;31mError:\033[0m Profile '{target_profile}' not found")
+    available = list(custom_profiles.keys())
+    if profiles:
+        available += [f"{name} (template)" for name in profiles.keys()]
+    print(f"Available profiles: {', '.join(available)}")
+    sys.exit(1)
+
 def cmd_profile(args):
     manifest = load_manifest()
     profiles = manifest.get("profiles", {})
@@ -707,41 +731,74 @@ def cmd_profile(args):
                     print_wrapped_field("Auto-enable", ", ".join(sorted(info["enable_optionals"])))
         else:
             print("  (none - run \033[1mmykit profile edit\033[0m or \033[1mmykit setup\033[0m to create one)")
-        print("\nTo switch profile: \033[1mmykit profile use <profile-name>\033[0m")
+        bindings = state.get("profile_bindings", {})
+        if bindings:
+            cwd_resolved = Path.cwd().resolve()
+            print("\nFolder bindings:")
+            for path, prof_id in bindings.items():
+                marker = " \033[1;32m(current dir)\033[0m" if Path(path).resolve() == cwd_resolved else ""
+                print(f"  • {path} → {display_profile_name(prof_id)}{marker}")
+        print("\nTo apply a profile to this folder only: \033[1mmykit profile use <profile-name>\033[0m")
+        print("  (global default profile is untouched; switching profiles here cleanly swaps skills, no leftovers)")
+        print("To bind a *different* folder to a profile without cd'ing there: \033[1mmykit profile bind <profile-name> [path]\033[0m")
+        print("To switch this machine's own default profile instead: \033[1mmykit profile use <profile-name> --global\033[0m")
         print("To edit profile: \033[1mmykit profile edit\033[0m")
         print("To delete profile: \033[1mmykit profile remove <profile-name>\033[0m")
+    elif args[0] == "bind":
+        if len(args) < 2:
+            print("Usage: mykit profile bind <profile-name> [path]")
+            sys.exit(1)
+        resolved_id, _ = resolve_profile_or_exit(args[1], custom_profiles, profiles)
+        bind_path = Path(args[2]).resolve() if len(args) > 2 else Path.cwd().resolve()
+        bind_path_to_profile(state, resolved_id, bind_path)
+        print(f"✅ Bound '\033[1;36m{bind_path}\033[0m' → profile '\033[1;32m{display_profile_name(resolved_id)}\033[0m'")
+        print("  (global active profile and global skill cache are untouched)")
+        if bind_path == Path.cwd().resolve():
+            cmd_sync()
+        else:
+            print(f"  Run 'cd {bind_path} && mykit sync' to apply it there.")
+    elif args[0] == "unbind":
+        bind_path = Path(args[1]).resolve() if len(args) > 1 else Path.cwd().resolve()
+        bindings = state.get("profile_bindings", {})
+        removed = bindings.pop(str(bind_path), None)
+        state["profile_bindings"] = bindings
+        save_state(state)
+        if removed:
+            print(f"✅ Unbound '\033[1;36m{bind_path}\033[0m' (was '\033[1;32m{display_profile_name(removed)}\033[0m')")
+            if bind_path == Path.cwd().resolve():
+                cmd_sync()
+        else:
+            print(f"No binding found for '{bind_path}'")
     elif args[0] in ("use", "set"):
         if len(args) < 2:
-            print("Usage: mykit profile use <profile_name>")
+            print("Usage: mykit profile use <profile_name> [--global]")
             sys.exit(1)
         target_profile = args[1]
-        if target_profile in custom_profiles:
-            source_profile = custom_profiles[target_profile]
-        elif target_profile in profiles:
-            source_profile = profiles[target_profile]
+        resolved_id, source_profile = resolve_profile_or_exit(target_profile, custom_profiles, profiles)
+
+        if "--global" in args:
+            # Switch this machine's own default profile (e.g. "work laptop" vs "personal laptop").
+            save_custom_profile(
+                state,
+                target_profile,
+                source_profile.get("include", []),
+                source_profile.get("description", ""),
+                source_profile.get("enable_optionals", []),
+            )
+            newly_enabled = enable_optionals_for_profile(state, manifest, source_profile.get("enable_optionals", []))
+            save_state(state)
+            resolved_id = f"custom:{target_profile}"
+            print(f"✅ Switched this machine's global default profile to '\033[1;32m{display_profile_name(resolved_id)}\033[0m'")
+            if newly_enabled:
+                print(f"  \033[1;36m→ Auto-enabled optional skills globally: {', '.join(newly_enabled)}\033[0m")
+            cmd_sync()
         else:
-            print(f"\033[1;31mError:\033[0m Profile '{target_profile}' not found")
-            available = list(custom_profiles.keys())
-            if profiles:
-                available += [f"{name} (template)" for name in profiles.keys()]
-            print(f"Available profiles: {', '.join(available)}")
-            sys.exit(1)
-
-        save_custom_profile(
-            state,
-            target_profile,
-            source_profile.get("include", []),
-            source_profile.get("description", ""),
-            source_profile.get("enable_optionals", []),
-        )
-        newly_enabled = enable_optionals_for_profile(state, manifest, source_profile.get("enable_optionals", []))
-        save_state(state)
-        target_profile = f"custom:{target_profile}"
-
-        print(f"✅ Switched active profile to '\033[1;32m{display_profile_name(target_profile)}\033[0m'")
-        if newly_enabled:
-            print(f"  \033[1;36m→ Auto-enabled optional skills for this profile (global): {', '.join(newly_enabled)}\033[0m")
-        cmd_sync()
+            # Default: bind THIS folder to the profile in place (no move, no new folder).
+            cwd = Path.cwd().resolve()
+            bind_path_to_profile(state, resolved_id, cwd)
+            print(f"✅ '\033[1;36m{cwd}\033[0m' → profile '\033[1;32m{display_profile_name(resolved_id)}\033[0m'")
+            print("  (global default profile is untouched; use --global to switch this machine's own default instead)")
+            cmd_sync()
     elif args[0] in ("edit", "customize", "add", "create", "new"):
         cmd_setup()
     elif args[0] in ("remove", "delete", "rm"):
@@ -881,7 +938,7 @@ def cmd_disable(skill_name, is_global=False):
 def cmd_sync(include_all=False):
     manifest = load_manifest()
     lockfile = load_lockfile()
-    active_profile = get_active_profile()
+    active_profile = get_active_profile(cwd=Path.cwd())
     enabled_pruning_packs = get_enabled_pruning_packs()
 
     # 1. Fetch only active GitHub skills by default. Use --all for explicit prefetch.
@@ -896,21 +953,21 @@ def cmd_sync(include_all=False):
 
     # 2. Prune ECC suite according to active profile
     ecc_base = Path("~/.agent-skills/store/fetched/ecc-suite").expanduser()
-    ecc_target = Path("~/.agent-skills/store/ecc-pruned-skills").expanduser()
+    ecc_target = profile_pack_dir(active_profile, "ecc-suite")
     if "ecc-suite" in enabled_pruning_packs and ecc_base.exists():
         inc, exc = prune_skills_for_profile(ecc_base, ecc_target, active_profile)
         print(f"⚡ Stack Profile '\033[1;36m{active_profile}\033[0m': Pruned {len(inc)} ECC skills ({len(exc)} excluded) into {ecc_target}")
 
     # 2.5 Prune ECC agents according to active profile
     ecc_agents_src = ecc_base / "agents" if ecc_base.exists() else None
-    ecc_agents_target = Path("~/.agent-skills/store/ecc-suite-pruned-agents").expanduser()
+    ecc_agents_target = profile_pack_dir(active_profile, "ecc-suite-agents")
     if "ecc-suite" in enabled_pruning_packs and ecc_agents_src and ecc_agents_src.exists():
         inc_a, exc_a = prune_pack_agents_for_profile(ecc_agents_src, ecc_agents_target, active_profile)
         print(f"🤖 Stack Profile '\033[1;36m{active_profile}\033[0m': Pruned {len(inc_a)} ECC agents ({len(exc_a)} excluded) into {ecc_agents_target}")
 
     # 3. Prune MengTo skills according to active profile
     mengto_fetched = Path("~/.agent-skills/store/fetched/mengto-skills").expanduser()
-    mengto_target = Path("~/.agent-skills/store/mengto-pruned-skills").expanduser()
+    mengto_target = profile_pack_dir(active_profile, "mengto-skills")
     if "mengto-skills" in enabled_pruning_packs and mengto_fetched.exists():
         inc, exc = prune_mengto_skills_for_profile(mengto_fetched, mengto_target, active_profile)
         print(f"🎨 Stack Profile '\033[1;36m{active_profile}\033[0m': Pruned {len(inc)} MengTo skills ({len(exc)} excluded) into {mengto_target}")

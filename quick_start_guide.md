@@ -75,19 +75,39 @@ mykit env setup
 
 ---
 
-## 🎛️ 4. 회사 PC vs 개인 PC 프로필 스위칭 (`mykit profile`)
+## 🎛️ 4. 프로필 스위칭 (`mykit profile`)
 
-개발 환경에 따라 필요한 스킬만 로드하여 토큰 소비량을 80% 이상 절감합니다.
+개발 환경에 따라 필요한 스킬만 로드하여 토큰 소비량을 80% 이상 절감합니다. 두 가지 모드가 있습니다.
+
+### 4-1. 폴더별 프로필 (기본 동작, 권장)
+
+`mykit profile use <profile>`은 기본적으로 **이 컴퓨터의 전역 기본 프로필은 그대로 두고, 지금 있는 이 폴더만** 그 프로필에 묶습니다(이동 없음). 같은 컴퓨터에서 다른 폴더/세션은 계속 기존 프로필을 쓰고, 지금 이 폴더에서 하는 작업 종류(기획 vs 개발)에 따라 필요한 스킬만 바꿔 쓰고 싶을 때 사용합니다.
+
+```bash
+cd ~/projects/a-folder
+
+# 기획할 땐
+mykit profile use pm
+
+# 개발할 땐 (같은 폴더, 프로필만 교체 — pm 스킬은 정리되고 typescript 스킬로 깨끗하게 교체됨)
+mykit profile use typescript
+```
+
+다른(지금 있지 않은) 폴더를 특정 프로필에 미리 붙여두고 싶다면 `mykit profile bind <profile> [path]`, 해제는 `mykit profile unbind [path]`.
+
+### 4-2. 회사 PC vs 개인 PC 프로필 스위칭 (`--global`)
+
+한 컴퓨터를 통째로 하나의 프로필로만 쓰고 싶다면(예: 회사 PC는 항상 work, 개인 PC는 항상 personal) `--global` 플래그를 붙입니다. 이 경우 폴더 이동 없이 이 컴퓨터의 전역 기본 프로필 자체가 바뀝니다.
 
 ```bash
 # 개인 PC 프로필 모드 (TS/JS, React, Python, Java, Kotlin, SpringBoot, Prisma 등)
-mykit profile use personal
+mykit profile use personal --global
 
 # 회사 PC 프로필 모드 (회사 전용 스택)
-mykit profile use work
+mykit profile use work --global
 
 # 전체 모드 (필터링 없이 270+ 스킬 모두 로드)
-mykit profile use full
+mykit profile use full --global
 ```
 
 ---

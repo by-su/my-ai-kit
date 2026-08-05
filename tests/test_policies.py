@@ -5,6 +5,8 @@ import contextlib
 import importlib.machinery
 import importlib.util
 import io
+import os
+import tempfile
 from pathlib import Path
 
 import src.dedupe as dedupe
@@ -714,22 +716,97 @@ class SetupSelectionTests(unittest.TestCase):
 
         self.assertEqual(state["custom_profiles"]["pm"]["enable_optionals"], [])
 
-    def test_enable_optionals_for_profile_enables_and_reports_new_names(self):
+    def test_profile_use_template_binds_current_directory_without_touching_global_state(self):
         mykit = load_mykit_bin()
+        saved_state = {}
 
-        manifest = {"optional": [{"name": "pm-skills"}, {"name": "pm-pdlc-conductor"}, {"name": "unrelated"}]}
-        state = {"enabled_optionals": ["pm-skills"], "disabled_optionals": ["pm-pdlc-conductor"]}
+        old_load_manifest = mykit.load_manifest
+        old_load_state = mykit.load_state
+        old_save_state = mykit.save_state
+        old_get_active_profile = mykit.get_active_profile
+        old_cmd_sync = mykit.cmd_sync
+        old_cwd = Path.cwd()
+        tmp = tempfile.TemporaryDirectory()
+        try:
+            mykit.load_manifest = lambda: {
+                "optional": [{"name": "pm-skills"}, {"name": "pm-pdlc-conductor"}],
+                "profiles": {
+                    "pm": {
+                        "description": "PM stack",
+                        "include": ["planning", "product"],
+                        "enable_optionals": ["pm-skills", "pm-pdlc-conductor"],
+                    }
+                },
+            }
+            mykit.load_state = lambda: {"active_profile": "personal", "enabled_optionals": []}
+            mykit.save_state = lambda state: saved_state.update(state)
+            mykit.get_active_profile = lambda: "personal"
+            mykit.cmd_sync = lambda: None
+            os.chdir(tmp.name)
 
-        newly_enabled = mykit.enable_optionals_for_profile(
-            state, manifest, ["pm-skills", "pm-pdlc-conductor", "not-a-real-skill"]
-        )
+            with contextlib.redirect_stdout(io.StringIO()):
+                mykit.cmd_profile(["use", "pm"])
 
-        self.assertEqual(newly_enabled, ["pm-pdlc-conductor"])
-        self.assertEqual(set(state["enabled_optionals"]), {"pm-skills", "pm-pdlc-conductor"})
-        self.assertNotIn("pm-pdlc-conductor", state["disabled_optionals"])
-        self.assertNotIn("not-a-real-skill", state["enabled_optionals"])
+            expected_cwd = str(Path(tmp.name).resolve())
+            self.assertEqual(saved_state["profile_bindings"], {expected_cwd: "pm"})
+            self.assertEqual(saved_state["active_profile"], "personal")
+            self.assertEqual(saved_state["enabled_optionals"], [])
+        finally:
+            os.chdir(old_cwd)
+            mykit.load_manifest = old_load_manifest
+            mykit.load_state = old_load_state
+            mykit.save_state = old_save_state
+            mykit.get_active_profile = old_get_active_profile
+            mykit.cmd_sync = old_cmd_sync
+            tmp.cleanup()
 
-    def test_profile_use_template_auto_enables_configured_optionals(self):
+    def test_profile_use_custom_profile_binds_current_directory_without_touching_global_state(self):
+        mykit = load_mykit_bin()
+        saved_state = {}
+
+        old_load_manifest = mykit.load_manifest
+        old_load_state = mykit.load_state
+        old_save_state = mykit.save_state
+        old_get_active_profile = mykit.get_active_profile
+        old_cmd_sync = mykit.cmd_sync
+        old_cwd = Path.cwd()
+        tmp = tempfile.TemporaryDirectory()
+        try:
+            mykit.load_manifest = lambda: {"optional": [{"name": "pm-skills"}, {"name": "pm-pdlc-conductor"}]}
+            mykit.load_state = lambda: {
+                "active_profile": "custom:other",
+                "enabled_optionals": [],
+                "custom_profiles": {
+                    "pm": {
+                        "description": "custom pm",
+                        "include": ["planning", "product"],
+                        "enable_optionals": ["pm-skills", "pm-pdlc-conductor"],
+                    },
+                    "other": {"description": "other", "include": []},
+                },
+            }
+            mykit.save_state = lambda state: saved_state.update(state)
+            mykit.get_active_profile = lambda: "custom:other"
+            mykit.cmd_sync = lambda: None
+            os.chdir(tmp.name)
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                mykit.cmd_profile(["use", "pm"])
+
+            expected_cwd = str(Path(tmp.name).resolve())
+            self.assertEqual(saved_state["profile_bindings"], {expected_cwd: "custom:pm"})
+            self.assertEqual(saved_state["active_profile"], "custom:other")
+            self.assertEqual(saved_state["enabled_optionals"], [])
+        finally:
+            os.chdir(old_cwd)
+            mykit.load_manifest = old_load_manifest
+            mykit.load_state = old_load_state
+            mykit.save_state = old_save_state
+            mykit.get_active_profile = old_get_active_profile
+            mykit.cmd_sync = old_cmd_sync
+            tmp.cleanup()
+
+    def test_profile_use_global_flag_switches_machine_default_and_enables_optionals(self):
         mykit = load_mykit_bin()
         saved_state = {}
 
@@ -755,47 +832,9 @@ class SetupSelectionTests(unittest.TestCase):
             mykit.cmd_sync = lambda: None
 
             with contextlib.redirect_stdout(io.StringIO()):
-                mykit.cmd_profile(["use", "pm"])
+                mykit.cmd_profile(["use", "pm", "--global"])
 
-            self.assertIn("pm-skills", saved_state["enabled_optionals"])
-            self.assertIn("pm-pdlc-conductor", saved_state["enabled_optionals"])
-        finally:
-            mykit.load_manifest = old_load_manifest
-            mykit.load_state = old_load_state
-            mykit.save_state = old_save_state
-            mykit.get_active_profile = old_get_active_profile
-            mykit.cmd_sync = old_cmd_sync
-
-    def test_profile_use_custom_profile_auto_enables_configured_optionals(self):
-        mykit = load_mykit_bin()
-        saved_state = {}
-
-        old_load_manifest = mykit.load_manifest
-        old_load_state = mykit.load_state
-        old_save_state = mykit.save_state
-        old_get_active_profile = mykit.get_active_profile
-        old_cmd_sync = mykit.cmd_sync
-        try:
-            mykit.load_manifest = lambda: {"optional": [{"name": "pm-skills"}, {"name": "pm-pdlc-conductor"}]}
-            mykit.load_state = lambda: {
-                "active_profile": "custom:other",
-                "enabled_optionals": [],
-                "custom_profiles": {
-                    "pm": {
-                        "description": "custom pm",
-                        "include": ["planning", "product"],
-                        "enable_optionals": ["pm-skills", "pm-pdlc-conductor"],
-                    },
-                    "other": {"description": "other", "include": []},
-                },
-            }
-            mykit.save_state = lambda state: saved_state.update(state)
-            mykit.get_active_profile = lambda: "custom:other"
-            mykit.cmd_sync = lambda: None
-
-            with contextlib.redirect_stdout(io.StringIO()):
-                mykit.cmd_profile(["use", "pm"])
-
+            self.assertEqual(saved_state["active_profile"], "custom:pm")
             self.assertIn("pm-skills", saved_state["enabled_optionals"])
             self.assertIn("pm-pdlc-conductor", saved_state["enabled_optionals"])
         finally:
@@ -1108,6 +1147,57 @@ class PruningPackPolicyTests(unittest.TestCase):
 
     def test_enabled_pruning_packs_default_to_prunable_packs(self):
         self.assertEqual(symlink.get_enabled_pruning_packs({}), symlink.PRUNABLE_PACKS)
+
+    def test_sync_swaps_profile_declared_optional_skill_when_folder_switches_profile(self):
+        old_load_manifest = symlink.load_manifest
+        old_load_state = symlink.load_state
+        old_load_local_state = symlink.load_local_state
+        old_save_local_state = symlink.save_local_state
+        old_get_active_profile = symlink.get_active_profile
+        old_resolve_profile_binding = symlink.resolve_profile_binding
+        old_get_profile_enable_optionals = symlink.get_profile_enable_optionals
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp).resolve()
+            cwd = tmp_path / "a-folder"
+            skill_src = tmp_path / "pm-pdlc-conductor"
+            (skill_src).mkdir(parents=True)
+            (skill_src / "SKILL.md").write_text("# pm-pdlc-conductor")
+            cwd.mkdir(parents=True)
+
+            manifest = {"optional": [{"name": "pm-pdlc-conductor", "source": "local", "path": str(skill_src)}]}
+            local_state_store = {"enabled_optionals": []}
+            enable_optionals_by_profile = {"pm": ["pm-pdlc-conductor"], "work": []}
+
+            try:
+                symlink.load_manifest = lambda: manifest
+                symlink.load_state = lambda: {"enabled_optionals": [], "disabled_optionals": []}
+                symlink.load_local_state = lambda cwd=None: dict(local_state_store)
+                symlink.save_local_state = lambda state, cwd=None: local_state_store.update(state)
+                symlink.resolve_profile_binding = lambda cwd: "pm"
+                symlink.get_profile_enable_optionals = lambda profile: enable_optionals_by_profile.get(profile, [])
+
+                dest = cwd / ".claude" / "skills" / "pm-pdlc-conductor"
+
+                # 1. Folder bound to "pm" -> skill gets linked locally.
+                symlink.get_active_profile = lambda cwd: "pm"
+                symlink.sync_active_skills(cwd=cwd)
+                self.assertTrue(dest.is_symlink())
+                self.assertEqual(local_state_store["profile_linked_skills"], ["pm-pdlc-conductor"])
+
+                # 2. Folder re-bound to "work" (doesn't declare this skill) -> cleanly unlinked.
+                symlink.get_active_profile = lambda cwd: "work"
+                symlink.sync_active_skills(cwd=cwd)
+                self.assertFalse(dest.exists())
+                self.assertEqual(local_state_store["profile_linked_skills"], [])
+            finally:
+                symlink.load_manifest = old_load_manifest
+                symlink.load_state = old_load_state
+                symlink.load_local_state = old_load_local_state
+                symlink.save_local_state = old_save_local_state
+                symlink.get_active_profile = old_get_active_profile
+                symlink.resolve_profile_binding = old_resolve_profile_binding
+                symlink.get_profile_enable_optionals = old_get_profile_enable_optionals
 
 
 if __name__ == "__main__":

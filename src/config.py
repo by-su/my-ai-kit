@@ -90,7 +90,22 @@ def save_state(state):
     with open(STATE_FILE, 'w', encoding='utf-8') as f:
         json.dump(state, f, indent=2, ensure_ascii=False)
 
-def get_active_profile():
+def resolve_profile_binding(cwd):
+    """Return the profile id bound to cwd (or an ancestor of it), or None if unbound."""
+    if cwd is None:
+        return None
+    state = load_state()
+    cwd_resolved = Path(cwd).resolve()
+    for bound_path, profile_id in state.get("profile_bindings", {}).items():
+        bound_resolved = Path(bound_path).expanduser().resolve()
+        if cwd_resolved == bound_resolved or bound_resolved in cwd_resolved.parents:
+            return profile_id
+    return None
+
+def get_active_profile(cwd=None):
+    bound = resolve_profile_binding(cwd)
+    if bound:
+        return bound
     state = load_state()
     return state.get("active_profile", "personal")
 

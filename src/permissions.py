@@ -183,3 +183,4 @@ def sync_auto_approve_permissions() -> list:
         sync_antigravity_permissions(cmds),
         sync_codex_config(sandbox_mode, approval_policy),
     ]
+

@@ -165,7 +165,7 @@ optional:
     description: "Everything Claude Code (스택 프로필 기반 맞춤형 스킬 팩)"
     source: "github"
     url: "https://github.com/affaan-m/everything-claude-code.git"
-    path: "~/.agent-skills/store/ecc-pruned-skills"
+    path: "~/.agent-skills/store/profiles/<profile>/ecc-suite"
     auto_update: false
     default_enabled: true
 
@@ -173,7 +173,7 @@ optional:
     description: "MengTo Design & UI/UX 스킬 팩 (iOS, SwiftUI, React, Design System)"
     source: "github"
     url: "https://github.com/MengTo/Skills.git"
-    path: "~/.agent-skills/store/mengto-pruned-skills"
+    path: "~/.agent-skills/store/profiles/<profile>/mengto-skills"
     auto_update: false
     default_enabled: true
 

@@ -3,7 +3,7 @@ import re
 from pathlib import Path
 from src.config import load_manifest, load_state, KIT_DIR, load_local_state, get_active_profile
 from src.mcp import get_mcp_states, check_mcp_health
-from src.pruner import get_profile_keywords
+from src.pruner import get_profile_keywords, profile_pack_dir
 from adapters import ALL_ADAPTERS
 
 def setup_env_interactive():
@@ -53,13 +53,13 @@ def setup_env_interactive():
 
 def show_stats():
     manifest = load_manifest()
-    active_profile = get_active_profile()
+    active_profile = get_active_profile(cwd=Path.cwd())
     active_mcps, disabled_mcps = get_mcp_states()
-    
+
     ecc_base = Path("~/.agent-skills/store/fetched/ecc-suite/skills").expanduser()
     ecc_total_cnt = len(list(ecc_base.glob("*"))) if ecc_base.exists() else 271
-    
-    pruned_dir = Path("~/.agent-skills/store/ecc-pruned-skills").expanduser()
+
+    pruned_dir = profile_pack_dir(active_profile, "ecc-suite")
     loaded_cnt = len(list(pruned_dir.glob("*"))) if pruned_dir.exists() else 92
     
     reduction_pct = ((ecc_total_cnt - loaded_cnt) / ecc_total_cnt * 100) if ecc_total_cnt > 0 else 0

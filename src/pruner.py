@@ -64,6 +64,23 @@ def _expand_role_keywords(keywords):
                 expanded.append(extra)
     return expanded
 
+def slugify_profile(profile_name):
+    return profile_name.replace(":", "-").replace("/", "-")
+
+# Profile is the top-level unit: ~/.agent-skills/store/profiles/<profile>/<pack>/
+PROFILES_STORE_BASE = Path("~/.agent-skills/store/profiles").expanduser()
+
+def profile_pack_dir(profile_name, pack_key):
+    return PROFILES_STORE_BASE / slugify_profile(profile_name) / pack_key
+
+def get_profile_enable_optionals(profile_name):
+    state = load_state()
+    if profile_name.startswith("custom:"):
+        custom_name = profile_name.split(":", 1)[1]
+        return state.get("custom_profiles", {}).get(custom_name, {}).get("enable_optionals", [])
+    manifest = load_manifest()
+    return manifest.get("profiles", {}).get(profile_name, {}).get("enable_optionals", [])
+
 def get_profile_keywords(profile_name):
     state = load_state()
     keywords = None

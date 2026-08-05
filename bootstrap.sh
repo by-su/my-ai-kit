@@ -60,7 +60,8 @@ run_cmd chmod +x "$MYKIT_BIN"
 # Automatically add PATH to ~/.zshrc or ~/.bashrc if not present
 PATH_LINE="export PATH=\"$SCRIPT_DIR/bin:\$PATH\""
 
-if [ "$SETUP_PATH" -eq 1 ] && [ -f "$HOME/.zshrc" ]; then
+if [ "$SETUP_PATH" -eq 1 ]; then
+    [ -f "$HOME/.zshrc" ] || run_cmd touch "$HOME/.zshrc"
     if ! grep -q "my-ai-kit/bin" "$HOME/.zshrc"; then
         append_line "$HOME/.zshrc" ""
         append_line "$HOME/.zshrc" "# my-ai-kit CLI PATH"
