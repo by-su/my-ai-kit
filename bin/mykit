@@ -13,7 +13,7 @@ sys.path.insert(0, str(KIT_DIR))
 
 from src.config import (
     CACHE_DIR, STATE_FILE, load_manifest, load_state, save_state, load_lockfile,
-    load_local_state, save_local_state, get_active_profile
+    load_local_state, save_local_state, get_active_profile, resolve_profile_binding
 )
 from src.symlink import (
     PRUNABLE_PACKS,
@@ -715,15 +715,26 @@ def cmd_profile(args):
     profiles = manifest.get("profiles", {})
     state = load_state()
     custom_profiles = get_custom_profiles(state)
-    active_profile = get_active_profile()
+    global_profile = state.get("active_profile", "personal")
 
     if not args or args[0] in ("list", "status"):
-        print(f"\033[1;36m--- Active Profile: {display_profile_name(active_profile)} ---\033[0m\n")
+        current_profile = get_active_profile(cwd=Path.cwd())
+        bound_here = resolve_profile_binding(Path.cwd()) is not None
+        print(f"\033[1;36m--- Global Default Profile: {display_profile_name(global_profile)} ---\033[0m")
+        if bound_here:
+            print(f"\033[1;33m--- Current Directory Profile: {display_profile_name(current_profile)} (folder-bound override) ---\033[0m\n")
+        else:
+            print(f"\033[90m(current directory is unbound -> uses the global default above)\033[0m\n")
         print("Profiles:")
         if custom_profiles:
             for name, info in custom_profiles.items():
                 profile_id = f"custom:{name}"
-                current = " \033[1;32m(active)\033[0m" if profile_id == active_profile else ""
+                tags = []
+                if profile_id == global_profile:
+                    tags.append("\033[1;36mglobal\033[0m")
+                if profile_id == current_profile and profile_id != global_profile:
+                    tags.append("\033[1;32mcurrent dir\033[0m")
+                current = f" ({', '.join(tags)})" if tags else ""
                 desc = info.get("description", "")
                 print(f"  • \033[1;34m{name}\033[0m{current}: {desc}")
                 print_wrapped_field("Stacks", format_stack_summary(info.get("include", [])))
@@ -837,7 +848,7 @@ def cmd_profile(args):
         del custom_profiles[target]
         state["custom_profiles"] = custom_profiles
 
-        is_active = (active_profile == f"custom:{target}" or state.get("custom_profile_name") == target)
+        is_active = (global_profile == f"custom:{target}" or state.get("custom_profile_name") == target)
         if is_active:
             state.pop("active_profile", None)
             state.pop("custom_profile_name", None)

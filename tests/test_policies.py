@@ -609,7 +609,7 @@ class SetupSelectionTests(unittest.TestCase):
                     }
                 },
             }
-            mykit.get_active_profile = lambda: "custom:web-server"
+            mykit.get_active_profile = lambda cwd=None: "custom:web-server"
 
             output = io.StringIO()
             with contextlib.redirect_stdout(output):
@@ -643,7 +643,7 @@ class SetupSelectionTests(unittest.TestCase):
                     }
                 },
             }
-            mykit.get_active_profile = lambda: "custom:pm"
+            mykit.get_active_profile = lambda cwd=None: "custom:pm"
 
             output = io.StringIO()
             with contextlib.redirect_stdout(output):
