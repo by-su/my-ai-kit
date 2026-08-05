@@ -20,6 +20,7 @@ source ~/.zshrc
 * **`bin/mykit` 실행 권한 자동 부여**: `chmod +x` 실행
 * **터미널 `PATH` 자동 등록**: `~/.zshrc` 및 `~/.bashrc`에 `mykit` 실행 경로 자동 연결
 * **초기 선택 마법사 실행**: 터미널에서 직접 실행하면 profile 생성/선택, pruning 언어/스택, 전역 Optional 스킬, 선택한 팩의 pruning 여부, MCP 선택
+* **충돌하는 Claude Code 플러그인 확인**: mykit이 관리하는 팩과 겹치는 콘텐츠를 profile 구분 없이 통째로 로드하는 플러그인(예: `ecc@ecc`)이 켜져 있으면 끌지 물어봄 (아래 설명 참고)
 * **활성 GitHub 스킬 lazy 다운로드**: 기본 활성 스킬만 다운로드하고 비활성 Optional은 필요할 때 가져옴
 * **재현 가능한 기본 설치**: 외부 GitHub 스킬은 기본적으로 lockfile commit을 사용하고 자동 업데이트하지 않음
 * **전체 에이전트 동기화 (`mykit sync`)**:
@@ -27,6 +28,12 @@ source ~/.zshrc
   - 21개 안전 명령어 자동 승인 규칙 일괄 배포
   - 내 기술 스택(TS/JS, React, Python, Java, SpringBoot 등) 맞춤 80% 스킬 토큰 다이어트
   - 커스텀 서브 에이전트(`agents/*.md`) 4개 에이전트에 자동 심볼릭 링크 연결
+
+### ⚠️ 왜 "충돌하는 플러그인" 체크가 필요한가
+
+`pm` 같은 좁은 profile을 쓰는데도 `mykit list`/스킬 목록에 관련 없는 `ecc:video-editing`, `ecc:videodb` 같은 스킬이 잔뜩 "locked by plugin"으로 떠 있는 문제가 실제로 있었습니다. 원인은 mykit이 아니라 **Claude Code 마켓플레이스 플러그인**이었습니다: `ecc@ecc` 플러그인(`github.com/affaan-m/ECC`)이 mykit의 `ecc-suite` 팩(`github.com/affaan-m/everything-claude-code`, 같은 제작자)과 사실상 같은 콘텐츠를 담고 있는데, 플러그인은 profile 개념이 없어서 **켜져 있으면 무조건 전체를 로드**합니다. `mykit profile use`로 아무리 프로필을 바꿔도 이 플러그인 스킬은 그대로 남습니다 — mykit의 pruning이 관여할 수 있는 대상이 아니기 때문입니다.
+
+그래서 `mykit setup` 마지막 단계에서 이런 known conflict를 감지하면 끌지 물어보게 만들었습니다. 직접 다시 켜고 싶다면 `/plugin`으로 관리하거나 `~/.claude/settings.json`의 `enabledPlugins`에서 값을 `true`로 되돌리면 됩니다.
 
 ---
 

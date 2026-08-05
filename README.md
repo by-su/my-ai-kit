@@ -181,6 +181,8 @@ mykit install prompt-architect
 
 `./bootstrap.sh`를 터미널에서 직접 실행하면 `mykit setup`이 열려 profile 생성/선택, pruning 언어/스택, 전역 Optional 스킬, 선택한 팩의 pruning 여부, MCP 서버를 선택합니다. 첫 setup은 profile을 반드시 하나 생성하고, 아무 언어도 미리 선택하지 않습니다. Pruning 질문은 `ecc-suite` 또는 `mengto-skills`를 전역 Optional로 선택했을 때만 표시됩니다. `↑/↓`로 이동하고 Space 또는 클릭으로 선택을 토글한 뒤 Enter로 다음 단계로 이동합니다. `b`로 이전 단계로 돌아가고, `q`/Esc로 취소합니다. 파이프/CI처럼 비대화형으로 실행될 때는 기존처럼 기본값으로 `mykit sync`만 실행합니다.
 
+설정 저장 직후 `mykit setup`은 **mykit이 관리하는 콘텐츠와 겹치는 Claude Code 플러그인이 켜져 있는지도 확인**합니다. 예를 들어 `ecc@ecc` 마켓플레이스 플러그인(`affaan-m/ECC`)은 mykit의 `ecc-suite` 팩(`affaan-m/everything-claude-code`)과 같은 계열 콘텐츠를 profile 구분 없이 통째로 로드합니다 — 그래서 `pm` 같은 좁은 profile을 쓰고 있어도 이 플러그인이 켜져 있으면 관련 없는 `ecc:*` 스킬이 잔뜩 보이는 문제가 생깁니다(plugin은 mykit profile pruning의 통제 범위 밖이라 항상 전체가 로드됨). 이런 충돌이 감지되면 끌지 물어보고, `[Y/n]`에서 엔터만 눌러도 기본으로 비활성화합니다. `~/.claude/settings.json`의 `enabledPlugins`에 반영되며, 적용은 다음 세션부터입니다.
+
 Bootstrap 안전 옵션:
 
 ```bash

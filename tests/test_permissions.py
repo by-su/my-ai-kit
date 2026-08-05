@@ -353,5 +353,53 @@ class SyncSessionHooksTests(unittest.TestCase):
                 permissions.CLAUDE_SETTINGS = old_path
 
 
+class ConflictingPluginTests(unittest.TestCase):
+    def setUp(self):
+        self.old_path = permissions.CLAUDE_SETTINGS
+        self.tmp = tempfile.TemporaryDirectory()
+        permissions.CLAUDE_SETTINGS = Path(self.tmp.name) / "settings.json"
+
+    def tearDown(self):
+        permissions.CLAUDE_SETTINGS = self.old_path
+        self.tmp.cleanup()
+
+    def test_finds_known_plugin_when_enabled(self):
+        permissions.write_json_file(permissions.CLAUDE_SETTINGS, {"enabledPlugins": {"ecc@ecc": True}})
+
+        found = permissions.find_enabled_conflicting_plugins()
+
+        self.assertIn("ecc@ecc", found)
+
+    def test_ignores_known_plugin_when_disabled(self):
+        permissions.write_json_file(permissions.CLAUDE_SETTINGS, {"enabledPlugins": {"ecc@ecc": False}})
+
+        found = permissions.find_enabled_conflicting_plugins()
+
+        self.assertEqual(found, {})
+
+    def test_ignores_unrelated_enabled_plugins(self):
+        permissions.write_json_file(permissions.CLAUDE_SETTINGS, {"enabledPlugins": {"some-other-plugin@x": True}})
+
+        found = permissions.find_enabled_conflicting_plugins()
+
+        self.assertEqual(found, {})
+
+    def test_returns_empty_when_no_settings_file(self):
+        self.assertEqual(permissions.find_enabled_conflicting_plugins(), {})
+
+    def test_disable_plugin_flips_flag_and_preserves_others(self):
+        permissions.write_json_file(
+            permissions.CLAUDE_SETTINGS,
+            {"enabledPlugins": {"ecc@ecc": True, "other@other": True}, "otherSetting": True},
+        )
+
+        permissions.disable_plugin("ecc@ecc")
+
+        data = json.loads(permissions.CLAUDE_SETTINGS.read_text(encoding="utf-8"))
+        self.assertFalse(data["enabledPlugins"]["ecc@ecc"])
+        self.assertTrue(data["enabledPlugins"]["other@other"])
+        self.assertTrue(data["otherSetting"])
+
+
 if __name__ == "__main__":
     unittest.main()

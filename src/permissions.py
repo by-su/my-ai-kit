@@ -168,6 +168,34 @@ def sync_claude_env_vars() -> str:
     return f"Configured {len(env_defaults)} default env var(s) -> {CLAUDE_SETTINGS}"
 
 
+# Claude Code marketplace plugins that duplicate content mykit already manages
+# (as a profile-pruned pack) but load it unfiltered whenever the plugin is enabled,
+# bypassing mykit's profile system entirely. Discovered when a "pm" profile still
+# showed every ecc-suite skill: the "ecc" plugin (affaan-m/ECC) ships the same
+# content as mykit's own "ecc-suite" pack (affaan-m/everything-claude-code) but
+# has no concept of profiles, so it's always fully loaded regardless of profile.
+KNOWN_CONFLICTING_PLUGINS = {
+    "ecc@ecc": (
+        "mykit's own \"ecc-suite\" pack already provides this content with profile-based "
+        "pruning; the plugin loads all of it regardless of your active profile."
+    ),
+}
+
+
+def find_enabled_conflicting_plugins() -> dict:
+    settings = read_json_file(CLAUDE_SETTINGS)
+    enabled = settings.get("enabledPlugins", {})
+    return {plugin_id: reason for plugin_id, reason in KNOWN_CONFLICTING_PLUGINS.items() if enabled.get(plugin_id)}
+
+
+def disable_plugin(plugin_id: str) -> None:
+    settings = read_json_file(CLAUDE_SETTINGS)
+    enabled = dict(settings.get("enabledPlugins", {}))
+    enabled[plugin_id] = False
+    settings["enabledPlugins"] = enabled
+    write_json_file(CLAUDE_SETTINGS, settings)
+
+
 def sync_auto_approve_permissions() -> list:
     manifest = load_manifest()
     cmds = manifest.get("auto_approve_commands", [])

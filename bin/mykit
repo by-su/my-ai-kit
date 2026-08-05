@@ -24,7 +24,10 @@ from src.symlink import (
 )
 from src.fetcher import fetch_skill_repo, update_skill_repo
 from src.mcp import sync_mcp_servers, check_mcp_health, get_mcp_states, MCP_TARGETS
-from src.permissions import sync_auto_approve_permissions, sync_session_hooks, sync_claude_env_vars
+from src.permissions import (
+    sync_auto_approve_permissions, sync_session_hooks, sync_claude_env_vars,
+    find_enabled_conflicting_plugins, disable_plugin,
+)
 from src.sessions import record_session_start, record_session_end, list_active_sessions, get_sessions_for_path
 from src.worktree import ensure_worktree, WorktreeError
 from src.linter import run_linter
@@ -514,6 +517,23 @@ def cmd_mcp(args):
         print(f"✓ Disabled MCP server '\033[1;33m{name}\033[0m'")
         cmd_sync()
 
+def prompt_disable_conflicting_plugins():
+    """Offer to disable known Claude Code plugins that duplicate mykit-managed content
+    but bypass mykit's profile pruning entirely (see KNOWN_CONFLICTING_PLUGINS)."""
+    for plugin_id, reason in find_enabled_conflicting_plugins().items():
+        print(f"\n\033[1;33m⚠ Claude Code plugin '{plugin_id}' is enabled and conflicts with mykit's profile system:\033[0m")
+        print(f"  {reason}")
+        print("  Disable it? [Y/n]")
+        try:
+            answer = input("> ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            answer = ""
+        if answer in ("", "y", "yes"):
+            disable_plugin(plugin_id)
+            print(f"  ✓ Disabled '{plugin_id}' in ~/.claude/settings.json (takes effect on next session restart).")
+        else:
+            print(f"  Left '{plugin_id}' enabled.")
+
 def cmd_setup():
     manifest = load_manifest()
     mcps_all = manifest.get("global", {}).get("mcp_servers", {})
@@ -692,6 +712,7 @@ def cmd_setup():
     save_state(state)
 
     print("\n✓ Saved initial setup preferences.")
+    prompt_disable_conflicting_plugins()
     cmd_sync()
 
 def resolve_profile_or_exit(target_profile, custom_profiles, profiles):
