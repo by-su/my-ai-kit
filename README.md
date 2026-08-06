@@ -134,7 +134,11 @@ mykit profile edit
 mykit profile remove <profile-name>
 ```
 
-`mykit profile edit`는 profile 생성/수정 및 스킬/MCP 셋업을 진행하며, `mykit profile remove`는 지정한 커스텀 profile을 삭제합니다.
+`mykit profile edit`는 profile 생성/수정 및 스킬/MCP 셋업을 진행하며, `mykit profile remove`는 지정한 커스텀 profile을 삭제합니다. runtime까지 함께 지우려면 `mykit profile remove <profile> --purge-runtime`을 사용합니다. 초기화 백업에는 `manifest.json`이 포함되며, 백업 디렉터리는 사용자 전용 권한으로 생성됩니다.
+
+`./bootstrap.sh`를 대화형으로 실행하면 전역 설정을 profile별로 격리할지 묻습니다. 동의하면 기존 `~/.claude`, `~/.codex`, Antigravity의 `~/.gemini/antigravity-cli`, `~/.gemini/config`, `~/.gemini/skills`, `~/.gemini/agents`와 skill store를 `~/.agent-skills/legacy/<timestamp>/`로 백업하고, 현재 profile 전용 runtime을 활성화합니다. 이후 `mykit profile use <profile> --global`로 전환하면 skill, agent, settings, hooks, MCP가 함께 전환됩니다. 비대화형 실행에서는 기존 공유 전역 runtime을 유지합니다.
+
+기존 설치를 이미 완료한 뒤 격리를 시작하려면 `mykit clean-global`을 사용할 수 있습니다. 이 명령은 현재 전역 profile runtime을 초기화하고 기존 데이터를 백업합니다.
 
 ### ⚠️ 같은 폴더에서 프로필을 동시에 여러 개 쓸 수 없는 이유
 

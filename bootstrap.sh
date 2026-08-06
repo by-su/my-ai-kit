@@ -79,21 +79,6 @@ if [ "$SETUP_PATH" -eq 1 ] && [ -f "$HOME/.bashrc" ]; then
     fi
 fi
 
-# Deploy global AGENTS.md (Karpathy guidelines) across targets
-if [ "$SETUP_AGENT_INSTRUCTIONS" -eq 1 ]; then
-    echo "📋 Deploying global AGENTS.md (Karpathy guidelines)..."
-    run_cmd mkdir -p "$HOME/.claude"
-    run_cmd mkdir -p "$HOME/.gemini/antigravity-cli"
-    run_cmd mkdir -p "$HOME/.codex"
-
-    run_cmd cp "$SCRIPT_DIR/AGENTS.md" "$HOME/.claude/CLAUDE.md"
-    run_cmd cp "$SCRIPT_DIR/AGENTS.md" "$HOME/.gemini/antigravity-cli/AGENTS.md"
-    run_cmd cp "$SCRIPT_DIR/AGENTS.md" "$HOME/.codex/instructions.md"
-    run_cmd cp "$SCRIPT_DIR/AGENTS.md" "$HOME/.codex/AGENTS.md"
-
-    echo "✓ Global Karpathy guidelines deployed to ~/.claude, ~/.gemini, ~/.codex"
-fi
-
 # Run initial setup when attached to a terminal; keep automation non-interactive.
 if [ "$DRY_RUN" -eq 1 ]; then
     echo "[dry-run] $MYKIT_BIN setup|sync"
@@ -101,6 +86,20 @@ elif [ "$NON_INTERACTIVE" -eq 0 ] && [ -t 0 ]; then
     "$MYKIT_BIN" setup
 else
     "$MYKIT_BIN" sync
+fi
+
+# Deploy after setup/sync so isolated profiles receive the instructions inside
+# their active runtime roots.
+if [ "$SETUP_AGENT_INSTRUCTIONS" -eq 1 ]; then
+    echo "📋 Deploying global AGENTS.md (Karpathy guidelines)..."
+    run_cmd mkdir -p "$HOME/.claude"
+    run_cmd mkdir -p "$HOME/.gemini/antigravity-cli"
+    run_cmd mkdir -p "$HOME/.codex"
+    run_cmd cp "$SCRIPT_DIR/AGENTS.md" "$HOME/.claude/CLAUDE.md"
+    run_cmd cp "$SCRIPT_DIR/AGENTS.md" "$HOME/.gemini/antigravity-cli/AGENTS.md"
+    run_cmd cp "$SCRIPT_DIR/AGENTS.md" "$HOME/.codex/instructions.md"
+    run_cmd cp "$SCRIPT_DIR/AGENTS.md" "$HOME/.codex/AGENTS.md"
+    echo "✓ Global Karpathy guidelines deployed to active profile runtime"
 fi
 
 echo ""

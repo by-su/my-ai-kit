@@ -38,6 +38,13 @@ from src.pruner import (
 )
 from src.completion import generate_completion, install_completion
 from src.dashboard import setup_env_interactive, show_stats
+from src.profile_runtime import (
+    RUNTIME_ROOTS,
+    SKILL_STORE,
+    activate_profile_runtime,
+    profile_runtime_dir,
+    remove_profile_runtime,
+)
 from src.setup import parse_setup_selection, run_multiselect
 from src.skills import get_active_skill_items
 from adapters import ALL_ADAPTERS
@@ -459,7 +466,7 @@ def cmd_reset():
             target.unlink()
             print(f"  ✓ Reset MCP config: {target}")
 
-    store_dir = home / ".agent-skills"
+    store_dir = home / ".agent-skills" / "store"
     if store_dir.exists():
         shutil.rmtree(store_dir)
         print(f"  ✓ Wiped cached skill store: {store_dir}")
@@ -470,6 +477,19 @@ def cmd_reset():
         print(f"  ✓ Removed local state file: {local_json}")
 
     print("\n\033[1;32m🎉 Deep Reset complete! All legacy commands and skills wiped 100%. Run 'mykit sync' to re-apply a fresh configuration.\033[0m")
+
+def cmd_clean_global():
+    """Retained as a compatibility alias for the profile runtime initializer."""
+    state = load_state()
+    profile = state.get("active_profile", "personal")
+    state["profile_runtime_isolated"] = True
+    backup_root, changes = activate_profile_runtime(profile, migrate_legacy=True)
+    state["profile_runtime_initialized"] = True
+    save_state(state)
+    if backup_root:
+        print(f"  ✓ Backed up legacy global configuration to {backup_root}")
+    for tool_name, _, target in changes:
+        print(f"  ✓ Activated {tool_name} profile runtime: {target}")
 
 def cmd_mcp(args):
     manifest = load_manifest()
@@ -704,6 +724,15 @@ def cmd_setup():
             selections["profile_keywords"],
             enable_optionals=selections["profile_enable_optionals"],
         )
+    if "profile_runtime_isolated" not in state and sys.stdin.isatty():
+        print("\n\033[1;36mInitialize profile-isolated global settings?\033[0m")
+        print("Existing Claude, Codex, Antigravity settings, hooks, MCP, and skill data will be backed up first.")
+        print("Use separate global runtime directories per profile? [Y/n]")
+        try:
+            answer = input("> ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            answer = "n"
+        state["profile_runtime_isolated"] = answer in ("", "y", "yes")
     state["enabled_pruning_packs"] = sorted(selections["pruning_packs"])
     state["enabled_mcps"] = sorted(selections["mcps"])
     state["disabled_mcps"] = sorted(set(mcps_all.keys()) - selections["mcps"])
@@ -759,6 +788,26 @@ def warn_active_sessions(path, same_cwd):
     print("  (creates/reuses a git worktree and binds it), or bind an existing separate folder yourself:")
     print("  \033[1mmykit profile bind <profile> <path>\033[0m")
     return True
+
+def warn_active_global_runtime_sessions():
+    """Warn before switching roots shared by all global agent sessions."""
+    matches = list_active_sessions()
+    if not matches:
+        return True
+
+    print(f"\033[1;33m⚠ {len(matches)} active agent session(s) found:\033[0m")
+    for session_id, info in matches.items():
+        print(
+            f"    • {session_id[:8]}  pid={info.get('pid')}  "
+            f"profile={info.get('profile')}  path={info.get('cwd')}"
+        )
+    print("  Global profile switching changes shared settings, hooks, MCP, and skill roots.")
+    print("  Continue anyway? [y/N]")
+    try:
+        answer = input("> ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        answer = "n"
+    return answer in ("y", "yes")
 
 def create_and_bind_worktree(state, resolved_id, cwd, explicit_path=None):
     """Create/reuse a git worktree for `resolved_id` and bind it. Returns the bound
@@ -869,6 +918,9 @@ def cmd_profile(args):
 
         if "--global" in args:
             # Switch this machine's own default profile (e.g. "work laptop" vs "personal laptop").
+            if not warn_active_global_runtime_sessions():
+                print("Global profile switch cancelled.")
+                return
             save_custom_profile(
                 state,
                 target_profile,
@@ -913,6 +965,7 @@ def cmd_profile(args):
             sys.exit(1)
 
         force = False
+        purge_runtime = "--purge-runtime" in args[1:]
         target = None
         for arg in args[1:]:
             if arg in ("-y", "--yes", "--force"):
@@ -939,6 +992,14 @@ def cmd_profile(args):
             if answer not in ("y", "yes"):
                 print("Deletion cancelled.")
                 return
+
+        runtime_exists = profile_runtime_dir(f"custom:{target}", "claude").parent.exists()
+        if runtime_exists and not purge_runtime and sys.stdin.isatty():
+            print(f"Delete runtime data for profile '{target}' too? [y/N]")
+            try:
+                purge_runtime = input("> ").strip().lower() in ("y", "yes")
+            except (EOFError, KeyboardInterrupt):
+                purge_runtime = False
 
         del custom_profiles[target]
         state["custom_profiles"] = custom_profiles
@@ -975,6 +1036,9 @@ def cmd_profile(args):
             print(f"✓ Deleted profile '\033[1;32m{target}\033[0m'")
 
         cmd_sync()
+        if purge_runtime:
+            if remove_profile_runtime(f"custom:{target}"):
+                print(f"✓ Removed runtime for profile '{target}'")
 
 cmd_stack = cmd_profile
 
@@ -1044,7 +1108,18 @@ def cmd_disable(skill_name, is_global=False):
 def cmd_sync(include_all=False):
     manifest = load_manifest()
     lockfile = load_lockfile()
+    state = load_state()
     active_profile = get_active_profile(cwd=Path.cwd())
+    if state.get("profile_runtime_isolated"):
+        runtime_profile = state.get("active_profile", "personal")
+        migrate_legacy = not state.get("profile_runtime_initialized", False)
+        backup_root, changes = activate_profile_runtime(runtime_profile, migrate_legacy=migrate_legacy)
+        state["profile_runtime_initialized"] = True
+        save_state(state)
+        if backup_root:
+            print(f"📦 Backed up legacy global configuration to {backup_root}")
+        for tool_name, _, target in changes:
+            print(f"🔒 Activated {tool_name} profile runtime -> {target}")
     enabled_pruning_packs = get_enabled_pruning_packs()
 
     # 1. Fetch only active GitHub skills by default. Use --all for explicit prefetch.
@@ -1207,7 +1282,7 @@ def cmd_sessions():
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: mykit [list|setup|stats|env|mcp|profile|install|remove|sync|prefetch|reset|update|lint|dedupe|doctor|completion|bootstrap|sessions]")
+        print("Usage: mykit [list|setup|stats|env|mcp|profile|install|remove|sync|prefetch|clean-global|reset|update|lint|dedupe|doctor|completion|bootstrap|sessions]")
         sys.exit(1)
 
     cmd = sys.argv[1]
@@ -1218,6 +1293,8 @@ def main():
         cmd_setup()
     elif cmd == "reset":
         cmd_reset()
+    elif cmd == "clean-global":
+        cmd_clean_global()
     elif cmd == "stats":
         show_stats()
     elif cmd in ("env", "secret", "secrets"):
