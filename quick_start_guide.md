@@ -19,8 +19,8 @@ source ~/.zshrc
 ### ⚙️ `./bootstrap.sh`가 내부에서 처리하는 작업
 * **`bin/mykit` 실행 권한 자동 부여**: `chmod +x` 실행
 * **터미널 `PATH` 자동 등록**: `~/.zshrc` 및 `~/.bashrc`에 `mykit` 실행 경로 자동 연결
-* **초기 profile runtime 질문**: 전역 skill, agent, settings, hooks, MCP를 profile별로 격리할지 먼저 묻고, 동의하면 기존 전역 데이터를 `manifest.json`과 함께 백업한 뒤 새 runtime을 활성화
-* **초기 선택 마법사 실행**: 터미널에서 직접 실행하면 profile 생성/선택, pruning 언어/스택, 전역 Optional 스킬, 선택한 팩의 pruning 여부, MCP 선택
+* **초기 profile runtime 질문**: 전역 skill, agent, settings, hooks, MCP를 profile별로 격리할지 먼저 묻습니다 — `[a]` 모든 profile 격리, `[o]` 지정한 owner profile 하나만 실제 전역 경로를 그대로 쓰고 나머지만 격리, `[n]` 격리 안 함(기본값) 중 선택. 격리를 선택하면 기존 전역 데이터를 백업한 뒤 새 runtime을 활성화
+* **초기 선택 마법사 실행**: 터미널에서 직접 실행하면 profile 생성/선택, pruning 언어/스택, 이 profile을 쓸 때 자동 활성화할 스킬, 선택한 팩의 pruning 여부, MCP 선택
 * **충돌하는 Claude Code 플러그인 확인**: mykit이 관리하는 팩과 겹치는 콘텐츠를 profile 구분 없이 통째로 로드하는 플러그인(예: `ecc@ecc`)이 켜져 있으면 끌지 물어봄 (아래 설명 참고)
 * **활성 GitHub 스킬 lazy 다운로드**: 기본 활성 스킬만 다운로드하고 비활성 Optional은 필요할 때 가져옴
 * **재현 가능한 기본 설치**: 외부 GitHub 스킬은 기본적으로 lockfile commit을 사용하고 자동 업데이트하지 않음
@@ -43,7 +43,7 @@ source ~/.zshrc
 | 명령어 | 설명 | 비고 |
 | :--- | :--- | :--- |
 | `mykit list` | 현재 스택 프로필, MCP, 서브 에이전트, 스킬 목록 상태 조회 | 현황 확인 |
-| `mykit setup` | profile 생성/선택, pruning 언어/스택, 전역 Optional 스킬, 선택한 팩의 pruning 여부, MCP 선택 | 초기 설정 |
+| `mykit setup` | profile 생성/선택, pruning 언어/스택, 이 profile을 쓸 때 자동 활성화할 스킬, 선택한 팩의 pruning 여부, MCP 선택 | 초기 설정 |
 | `mykit sync` | 활성 스킬만 lazy fetch 후 전체 에이전트(Claude, Antigravity, Codex) 동기화 | 핵심 배포 |
 | `mykit sync --all` | 비활성 Optional까지 모두 fetch 후 동기화 | 전체 사전 다운로드 |
 | `mykit prefetch <skill>` | 스킬을 활성화하지 않고 미리 다운로드 | 선택 다운로드 |
@@ -136,6 +136,8 @@ git 저장소가 아닌 폴더에서는 에러가 나며, `--global`과는 같�
 
 전역 runtime 격리가 활성화된 상태에서 실행 중인 세션이 감지되면, 전역 skill/settings/hooks/MCP 경로를 바꾸기 전에 계속 진행할지 확인합니다. 동시에 서로 다른 전역 profile을 사용해야 한다면 별도 프로세스 환경이나 컴퓨터 단위 profile을 사용해야 합니다.
 
+`personal`/`work`/`full` 같은 프로필은 mykit이 미리 만들어두는 게 아니라, `mykit profile edit`으로 직접 만든 custom profile 이름입니다 — 아래 예시는 그렇게 만든 프로필이 이미 있다고 가정합니다.
+
 ```bash
 # 개인 PC 프로필 모드 (TS/JS, React, Python, Java, Kotlin, SpringBoot, Prisma 등)
 mykit profile use personal --global
@@ -143,7 +145,7 @@ mykit profile use personal --global
 # 회사 PC 프로필 모드 (회사 전용 스택)
 mykit profile use work --global
 
-# 전체 모드 (필터링 없이 270+ 스킬 모두 로드)
+# 전체 모드 (필터링 없이 270+ 스킬 모두 로드하는 custom profile을 만들었다면)
 mykit profile use full --global
 ```
 

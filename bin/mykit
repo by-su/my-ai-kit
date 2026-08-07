@@ -29,6 +29,7 @@ from src.permissions import (
     find_enabled_conflicting_plugins, disable_plugin,
 )
 from src.sessions import record_session_start, record_session_end, list_active_sessions, get_sessions_for_path
+from src.summary_language import sync_summary_language
 from src.worktree import ensure_worktree, WorktreeError
 from src.linter import run_linter
 from src.dedupe import run_dedupe
@@ -36,11 +37,9 @@ from src.pruner import (
     prune_skills_for_profile, prune_mengto_skills_for_profile, prune_pack_agents_for_profile,
     profile_pack_dir,
 )
-from src.completion import generate_completion, install_completion
+from src.completion import generate_completion
 from src.dashboard import setup_env_interactive, show_stats
 from src.profile_runtime import (
-    RUNTIME_ROOTS,
-    SKILL_STORE,
     activate_profile_runtime,
     profile_runtime_dir,
     remove_profile_runtime,
@@ -204,32 +203,8 @@ def save_custom_profile(state, name, keywords, description=None, enable_optional
         "enable_optionals": resolved_enable_optionals,
     }
     state["custom_profiles"] = custom_profiles
-    state["active_profile"] = f"custom:{name}"
     state["custom_profile_name"] = name
     state["profile_keywords"] = sorted(keywords)
-
-def enable_optionals_for_profile(state, manifest, names):
-    """Globally enable the optional skills a profile declares via `enable_optionals`.
-
-    Used only by `mykit profile use --global`. Returns the subset of `names` that
-    were newly enabled, so callers can print a concise "just turned these on" message.
-    """
-    if not names:
-        return []
-    all_optionals = {item.get("name") for item in manifest.get("optional", [])}
-    enabled = set(state.get("enabled_optionals", []))
-    disabled = set(state.get("disabled_optionals", []))
-    newly_enabled = []
-    for name in names:
-        if name not in all_optionals:
-            continue
-        if name not in enabled:
-            newly_enabled.append(name)
-        enabled.add(name)
-        disabled.discard(name)
-    state["enabled_optionals"] = list(enabled)
-    state["disabled_optionals"] = list(disabled)
-    return newly_enabled
 
 def bind_path_to_profile(state, resolved_id, bind_path):
     bindings = state.get("profile_bindings", {})
@@ -257,7 +232,6 @@ def pad_cell(s, width):
 
 def cmd_list(args=None):
     manifest = load_manifest()
-    state = load_state()
     local_state = load_local_state()
     active_profile = get_active_profile(cwd=Path.cwd())
 
@@ -298,9 +272,7 @@ def cmd_list(args=None):
                 print("⚠️ ecc-suite not pruned yet. Run 'mykit sync' first.")
             return
 
-    global_enabled = set(state.get("enabled_optionals", []))
     local_enabled = set(local_state.get("enabled_optionals", []))
-    disabled_optionals = set(state.get("disabled_optionals", []))
 
     # --- Header Box ---
     total_inner_width = 86
@@ -338,7 +310,7 @@ def cmd_list(args=None):
     agents_dir = KIT_DIR / "agents"
     found_agents = list(agents_dir.glob("*.md")) if agents_dir.exists() else []
     if found_agents:
-        print(f"  \033[90m[my-ai-kit/agents]\033[0m")
+        print("  \033[90m[my-ai-kit/agents]\033[0m")
         for f in found_agents:
             print(f"    • \033[1;32m{f.stem}\033[0m \033[90m({f.name})\033[0m")
 
@@ -347,10 +319,7 @@ def cmd_list(args=None):
     pack_agent_found = False
     for item in manifest.get("optional", []):
         name = item.get("name")
-        is_default = item.get("default_enabled", False)
-        is_loc = name in local_enabled
-        is_glob = (name in global_enabled) or (is_default and name not in disabled_optionals)
-        if not (is_loc or is_glob):
+        if name not in local_enabled:
             continue
         path = resolve_skill_path(item, active_profile=active_profile)
         pack_agents = find_pack_agents(path, fetched_name=name, active_profile=active_profile) if path and path.exists() else []
@@ -395,15 +364,11 @@ def cmd_list(args=None):
         name = item.get("name")
         desc = item.get("description", "")
         src = item.get("source", "local")
-        is_default = item.get("default_enabled", False)
 
         is_loc = name in local_enabled
-        is_glob = (name in global_enabled) or (is_default and name not in disabled_optionals)
 
         if is_loc:
             status_str = "\033[1;32m📍 Local\033[0m"
-        elif is_glob:
-            status_str = "\033[1;36m🌐 Global\033[0m"
         else:
             status_str = "\033[90m⚪ Off\033[0m"
 
@@ -537,6 +502,32 @@ def cmd_mcp(args):
         print(f"✓ Disabled MCP server '\033[1;33m{name}\033[0m'")
         cmd_sync()
 
+def cmd_language(args):
+    """Get/set the preferred language for summaries (ECC plugin session summaries and
+    Claude Code's own end-of-turn recaps). Re-applied on every 'mykit sync' so the
+    setting survives ECC plugin updates and bootstrap.sh's AGENTS.md redeploys."""
+    state = load_state()
+    if not args or args[0] == "get":
+        current = state.get("summary_language")
+        if current:
+            print(f"Summary language: \033[1;36m{current}\033[0m")
+        else:
+            print("Summary language: not set (default). Use: mykit language set <language>")
+    elif args[0] == "set":
+        if len(args) < 2:
+            print("Usage: mykit language set <language>")
+            sys.exit(1)
+        language = " ".join(args[1:])
+        state["summary_language"] = language
+        save_state(state)
+        print(f"✓ Summary language set to '\033[1;32m{language}\033[0m'")
+        cmd_sync()
+    elif args[0] == "sync":
+        print(f"  - {sync_summary_language()}")
+    else:
+        print("Usage: mykit language [get|set <language>|sync]")
+        sys.exit(1)
+
 def prompt_disable_conflicting_plugins():
     """Offer to disable known Claude Code plugins that duplicate mykit-managed content
     but bypass mykit's profile pruning entirely (see KNOWN_CONFLICTING_PLUGINS)."""
@@ -565,10 +556,6 @@ def cmd_setup():
     profile_items = {"add": {"description": "새 profile 생성"}}
     for name, info in custom_profiles.items():
         profile_items[name] = {"description": format_profile_details(info.get("description", ""), info.get("include", []))}
-    category_items = {
-        cat: {"description": ", ".join(kws[:5]) + "..."}
-        for cat, kws in SETUP_KEYWORD_CATEGORIES.items()
-    }
     profile_keywords = get_setup_profile_keywords(manifest)
     has_existing_profile = (STATE_FILE.exists() or bool(state)) and bool(state.get("active_profile") or get_active_profile())
     current_profile = state.get("active_profile", get_active_profile()) if has_existing_profile else "add"
@@ -591,13 +578,6 @@ def cmd_setup():
         if name in current_enabled_mcps or (conf.get("enabled", True) and name not in current_disabled_mcps)
     }
 
-    current_enabled_skills = set(state.get("enabled_optionals", []))
-    current_disabled_skills = set(state.get("disabled_optionals", []))
-    default_skills = {
-        item.get("name") for item in optionals
-        if item.get("name") in current_enabled_skills
-        or (item.get("default_enabled", False) and item.get("name") not in current_disabled_skills)
-    }
     default_profile_enable_optionals = set(
         custom_profiles.get(selected_profile, {}).get("enable_optionals", [])
     )
@@ -605,13 +585,12 @@ def cmd_setup():
         "profile_keywords": set(default_profile_keywords),
         "profile_enable_optionals": set(default_profile_enable_optionals),
         "mcps": set(default_mcps),
-        "skills": set(default_skills),
         "pruning_packs": set(get_enabled_pruning_packs(state)),
     }
 
     base_steps = ["profile"] if custom_profiles else []
     kw_steps = [f"kw_cat:{cat}" for cat in SETUP_KEYWORD_CATEGORIES]
-    rest_steps = ["skills", "profile_enable_optionals", "pruning_packs", "mcps"]
+    rest_steps = ["profile_enable_optionals", "pruning_packs", "mcps"]
     step_keys = base_steps + kw_steps + rest_steps
 
     print("\033[1;36m--- mykit initial setup ---\033[0m")
@@ -631,19 +610,16 @@ def cmd_setup():
         elif key == "profile_keywords":
             title = "Languages and stacks for pruning"
             items = profile_keywords
-        elif key == "skills":
-            title = "Global optional skills to enable"
-            items = optionals_by_name
         elif key == "profile_enable_optionals":
             title = "Auto-enable these skills whenever this profile is selected"
             items = optionals_by_name
         elif key == "pruning_packs":
-            selected_prunable_skills = selections["skills"].intersection(PRUNABLE_PACKS)
+            selected_prunable_skills = selections["profile_enable_optionals"].intersection(PRUNABLE_PACKS)
             if not selected_prunable_skills:
                 selections["pruning_packs"] = set()
                 idx += 1
                 continue
-            title = "Enabled skill packs to prune by selected stack"
+            title = "Prune these skill packs by your selected stack (uncheck for full/unpruned)"
             items = {
                 name: optionals_by_name[name]
                 for name in optionals_by_name
@@ -724,20 +700,36 @@ def cmd_setup():
             selections["profile_keywords"],
             enable_optionals=selections["profile_enable_optionals"],
         )
+        custom_profiles = get_custom_profiles(state)
     if "profile_runtime_isolated" not in state and sys.stdin.isatty():
         print("\n\033[1;36mInitialize profile-isolated global settings?\033[0m")
         print("Existing Claude, Codex, Antigravity settings, hooks, MCP, and skill data will be backed up first.")
-        print("Use separate global runtime directories per profile? [Y/n]")
+        print("  [a] Isolate every profile - each gets its own separate global settings")
+        print("  [o] Isolate all profiles except one 'owner' profile, which keeps writing directly to the real global settings")
+        print("  [n] Don't isolate - keep sharing one global settings across every profile (default)")
         try:
-            answer = input("> ").strip().lower()
+            answer = input("Choice [a/o/N]: ").strip().lower()
         except (EOFError, KeyboardInterrupt):
             answer = "n"
-        state["profile_runtime_isolated"] = answer in ("", "y", "yes")
+
+        if answer == "o":
+            valid_ids = sorted(f"custom:{name}" for name in custom_profiles)
+            print(f"Available profiles: {', '.join(valid_ids)}")
+            try:
+                owner = input("Owner profile (keeps real global settings) > ").strip()
+            except (EOFError, KeyboardInterrupt):
+                owner = ""
+            if owner in valid_ids:
+                state["profile_runtime_isolated"] = True
+                state["profile_runtime_owner"] = owner
+            else:
+                print(f"\033[1;33mUnrecognized profile '{owner}' - skipping isolation setup. Re-run 'mykit profile edit' to try again.\033[0m")
+                state["profile_runtime_isolated"] = False
+        else:
+            state["profile_runtime_isolated"] = answer == "a"
     state["enabled_pruning_packs"] = sorted(selections["pruning_packs"])
     state["enabled_mcps"] = sorted(selections["mcps"])
     state["disabled_mcps"] = sorted(set(mcps_all.keys()) - selections["mcps"])
-    state["enabled_optionals"] = sorted(selections["skills"])
-    state["disabled_optionals"] = sorted(set(optionals_by_name.keys()) - selections["skills"])
     save_state(state)
 
     print("\n✓ Saved initial setup preferences.")
@@ -838,7 +830,7 @@ def cmd_profile(args):
         if bound_here:
             print(f"\033[1;33m--- Current Directory Profile: {display_profile_name(current_profile)} (folder-bound override) ---\033[0m\n")
         else:
-            print(f"\033[90m(current directory is unbound -> uses the global default above)\033[0m\n")
+            print("\033[90m(current directory is unbound -> uses the global default above)\033[0m\n")
         print("Profiles:")
         if custom_profiles:
             for name, info in custom_profiles.items():
@@ -928,12 +920,10 @@ def cmd_profile(args):
                 source_profile.get("description", ""),
                 source_profile.get("enable_optionals", []),
             )
-            newly_enabled = enable_optionals_for_profile(state, manifest, source_profile.get("enable_optionals", []))
+            state["active_profile"] = f"custom:{target_profile}"
             save_state(state)
             resolved_id = f"custom:{target_profile}"
             print(f"✅ Switched this machine's global default profile to '\033[1;32m{display_profile_name(resolved_id)}\033[0m'")
-            if newly_enabled:
-                print(f"  \033[1;36m→ Auto-enabled optional skills globally: {', '.join(newly_enabled)}\033[0m")
             cmd_sync()
         elif worktree_requested:
             # Create/reuse a git worktree for this profile so it gets its own physical
@@ -1016,6 +1006,7 @@ def cmd_profile(args):
                     custom_profiles[next_profile].get("include", []),
                     custom_profiles[next_profile].get("description", ""),
                 )
+                state["active_profile"] = f"custom:{next_profile}"
                 save_state(state)
                 print(f"✓ Deleted profile '\033[1;32m{target}\033[0m' and switched active profile to '\033[1;32m{next_profile}\033[0m'")
             elif profiles:
@@ -1026,6 +1017,7 @@ def cmd_profile(args):
                     profiles[next_profile].get("include", []),
                     profiles[next_profile].get("description", ""),
                 )
+                state["active_profile"] = f"custom:{next_profile}"
                 save_state(state)
                 print(f"✓ Deleted profile '\033[1;32m{target}\033[0m' and switched active profile to template '\033[1;32m{next_profile}\033[0m'")
             else:
@@ -1042,33 +1034,22 @@ def cmd_profile(args):
 
 cmd_stack = cmd_profile
 
-def cmd_enable(skill_name, is_global=False):
+def cmd_enable(skill_name):
     manifest = load_manifest()
     all_optionals = [item.get("name") for item in manifest.get("optional", [])]
-    
+
     if skill_name not in all_optionals:
         print(f"\033[1;31mError:\033[0m Optional skill '{skill_name}' not found in manifest.yaml")
         sys.exit(1)
 
     cwd = Path.cwd()
 
-    if is_global:
-        state = load_state()
-        enabled = set(state.get("enabled_optionals", []))
-        disabled = set(state.get("disabled_optionals", []))
-        enabled.add(skill_name)
-        disabled.discard(skill_name)
-        state["enabled_optionals"] = list(enabled)
-        state["disabled_optionals"] = list(disabled)
-        save_state(state)
-        print(f"✓ Enabled optional skill '{skill_name}' [Global Scope]")
-    else:
-        local_state = load_local_state(cwd)
-        enabled = set(local_state.get("enabled_optionals", []))
-        enabled.add(skill_name)
-        local_state["enabled_optionals"] = list(enabled)
-        save_local_state(local_state, cwd)
-        print(f"✓ Enabled optional skill '{skill_name}' [Local Scope: {cwd}]")
+    local_state = load_local_state(cwd)
+    enabled = set(local_state.get("enabled_optionals", []))
+    enabled.add(skill_name)
+    local_state["enabled_optionals"] = list(enabled)
+    save_local_state(local_state, cwd)
+    print(f"✓ Enabled optional skill '{skill_name}' [Local Scope: {cwd}]")
 
     cmd_sync()
 
@@ -1078,32 +1059,18 @@ def cmd_enable(skill_name, is_global=False):
         print("\n\033[1;36m🔄 Post-Install Hook: Running automatic dedupe check for newly installed skill...\033[0m\n")
         run_dedupe(threshold=30.0, focus_skill=skill_name)
 
-def cmd_disable(skill_name, is_global=False):
+def cmd_disable(skill_name):
     cwd = Path.cwd()
 
-    if is_global:
-        state = load_state()
-        enabled = set(state.get("enabled_optionals", []))
-        disabled = set(state.get("disabled_optionals", []))
-        enabled.discard(skill_name)
-        disabled.add(skill_name)
-        state["enabled_optionals"] = list(enabled)
-        state["disabled_optionals"] = list(disabled)
-        save_state(state)
+    local_state = load_local_state(cwd)
+    enabled = set(local_state.get("enabled_optionals", []))
+    enabled.discard(skill_name)
+    local_state["enabled_optionals"] = list(enabled)
+    save_local_state(local_state, cwd)
 
-        for adapter in ALL_ADAPTERS:
-            adapter.unlink_skill(skill_name, is_local=False)
-        print(f"✓ Disabled optional skill '{skill_name}' [Global Scope]")
-    else:
-        local_state = load_local_state(cwd)
-        enabled = set(local_state.get("enabled_optionals", []))
-        enabled.discard(skill_name)
-        local_state["enabled_optionals"] = list(enabled)
-        save_local_state(local_state, cwd)
-
-        for adapter in ALL_ADAPTERS:
-            adapter.unlink_skill(skill_name, is_local=True, cwd=cwd)
-        print(f"✓ Disabled optional skill '{skill_name}' [Local Scope: {cwd}]")
+    for adapter in ALL_ADAPTERS:
+        adapter.unlink_skill(skill_name, is_local=True, cwd=cwd)
+    print(f"✓ Disabled optional skill '{skill_name}' [Local Scope: {cwd}]")
 
 def cmd_sync(include_all=False):
     manifest = load_manifest()
@@ -1112,8 +1079,9 @@ def cmd_sync(include_all=False):
     active_profile = get_active_profile(cwd=Path.cwd())
     if state.get("profile_runtime_isolated"):
         runtime_profile = state.get("active_profile", "personal")
+        owner_profile = state.get("profile_runtime_owner")
         migrate_legacy = not state.get("profile_runtime_initialized", False)
-        backup_root, changes = activate_profile_runtime(runtime_profile, migrate_legacy=migrate_legacy)
+        backup_root, changes = activate_profile_runtime(runtime_profile, migrate_legacy=migrate_legacy, owner_profile=owner_profile)
         state["profile_runtime_initialized"] = True
         save_state(state)
         if backup_root:
@@ -1160,6 +1128,7 @@ def cmd_sync(include_all=False):
     perm_results = sync_auto_approve_permissions()
     perm_results.append(sync_session_hooks())
     perm_results.append(sync_claude_env_vars())
+    perm_results.append(sync_summary_language())
 
     # 6. Sync symlinks (both global & pwd local skills + custom agents)
     results = sync_active_skills(cwd=Path.cwd())
@@ -1253,6 +1222,18 @@ def cmd_doctor():
         agents_cnt = len(list(ag_dir.glob("*")))
         print(f"✓ Adapter [{adapter.name}] -> Skills: {skills_cnt} item(s) ({g_dir}) | Custom Agents: {agents_cnt} item(s) ({ag_dir})")
 
+    print("\n\033[1;34m[Active GitHub Skills - Fetched?]\033[0m")
+    active_skills = get_active_skill_items(manifest, cwd=Path.cwd())
+    unfetched = [
+        item.get("name") for item in active_skills
+        if item.get("source") == "github" and not (CACHE_DIR / "fetched" / item.get("name")).exists()
+    ]
+    if unfetched:
+        print(f"  \033[1;31m✗ {len(unfetched)} active skill(s) declared but never cloned: {', '.join(unfetched)}\033[0m")
+        print("    Run 'mykit sync' to fetch them.")
+    else:
+        print("  ✓ All active GitHub skills are cloned")
+
 def cmd_session_hook(event):
     try:
         payload = json.load(sys.stdin)
@@ -1282,7 +1263,7 @@ def cmd_sessions():
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: mykit [list|setup|stats|env|mcp|profile|install|remove|sync|prefetch|clean-global|reset|update|lint|dedupe|doctor|completion|bootstrap|sessions]")
+        print("Usage: mykit [list|setup|stats|env|mcp|language|profile|install|remove|sync|prefetch|clean-global|reset|update|lint|dedupe|doctor|completion|bootstrap|sessions]")
         sys.exit(1)
 
     cmd = sys.argv[1]
@@ -1306,6 +1287,8 @@ def main():
             print("Usage: mykit env setup")
     elif cmd == "mcp":
         cmd_mcp(sys.argv[2:])
+    elif cmd == "language":
+        cmd_language(sys.argv[2:])
     elif cmd in ("profile", "stack"):
         cmd_profile(sys.argv[2:])
     elif cmd == "completion":
@@ -1313,18 +1296,14 @@ def main():
         generate_completion(sub)
     elif cmd in ("install", "enable"):
         if len(sys.argv) < 3:
-            print("Usage: mykit install <skill-name> [--global]")
+            print("Usage: mykit install <skill-name>")
             sys.exit(1)
-        is_global = "--global" in sys.argv
-        skill_name = sys.argv[2] if sys.argv[2] != "--global" else sys.argv[3]
-        cmd_enable(skill_name, is_global=is_global)
+        cmd_enable(sys.argv[2])
     elif cmd in ("remove", "disable"):
         if len(sys.argv) < 3:
-            print("Usage: mykit remove <skill-name> [--global]")
+            print("Usage: mykit remove <skill-name>")
             sys.exit(1)
-        is_global = "--global" in sys.argv
-        skill_name = sys.argv[2] if sys.argv[2] != "--global" else sys.argv[3]
-        cmd_disable(skill_name, is_global=is_global)
+        cmd_disable(sys.argv[2])
     elif cmd in ("sync", "bootstrap"):
         cmd_sync(include_all="--all" in sys.argv[2:])
     elif cmd == "prefetch":

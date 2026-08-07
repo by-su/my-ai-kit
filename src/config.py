@@ -1,5 +1,4 @@
 import json
-import os
 from pathlib import Path
 
 HOME = Path.home()
@@ -83,7 +82,7 @@ def load_state():
     if STATE_FILE.exists():
         with open(STATE_FILE, 'r', encoding='utf-8') as f:
             return json.load(f)
-    return {"enabled_optionals": [], "active_profile": "personal"}
+    return {"active_profile": "personal"}
 
 def save_state(state):
     STATE_FILE.parent.mkdir(parents=True, exist_ok=True)

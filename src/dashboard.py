@@ -1,9 +1,8 @@
-import os
 import re
 from pathlib import Path
-from src.config import load_manifest, load_state, KIT_DIR, load_local_state, get_active_profile
-from src.mcp import get_mcp_states, check_mcp_health
-from src.pruner import get_profile_keywords, profile_pack_dir
+from src.config import load_manifest, KIT_DIR, get_active_profile
+from src.mcp import get_mcp_states
+from src.pruner import profile_pack_dir
 from adapters import ALL_ADAPTERS
 
 def setup_env_interactive():
@@ -52,7 +51,6 @@ def setup_env_interactive():
     print(f"\n\033[1;32m✓ Saved secrets to {env_file} successfully!\033[0m\n")
 
 def show_stats():
-    manifest = load_manifest()
     active_profile = get_active_profile(cwd=Path.cwd())
     active_mcps, disabled_mcps = get_mcp_states()
 

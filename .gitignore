@@ -11,6 +11,9 @@ __pycache__/
 .claude/skills/
 .gemini/skills/
 .codex/skills/
+.claude/agents/
+.gemini/agents/
+.codex/agents/
 
 # pm-pdlc-conductor per-initiative run state
 _pm-pdlc/

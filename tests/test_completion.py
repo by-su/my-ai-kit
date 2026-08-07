@@ -38,7 +38,7 @@ class CompletionScriptGenerationTests(unittest.TestCase):
 
     def test_bash_script_embeds_current_optional_skill_names(self):
         script = completion.build_bash_completion_script(["alpha-pack", "zeta-pack"])
-        self.assertIn('compgen -W "alpha-pack zeta-pack --global --all"', script)
+        self.assertIn('compgen -W "alpha-pack zeta-pack --all"', script)
         self.assertNotIn("db-helper", script)
 
     def test_generate_completion_zsh_uses_live_manifest(self):
@@ -67,7 +67,7 @@ class InstalledCompletionFilesTests(unittest.TestCase):
         bash_text = (KIT_DIR / "completions" / "mykit.bash").read_text(encoding="utf-8")
 
         self.assertIn(f'echo "{names_str}"', zsh_text)
-        self.assertIn(f'compgen -W "{names_str} --global --all"', bash_text)
+        self.assertIn(f'compgen -W "{names_str} --all"', bash_text)
 
 
 if __name__ == "__main__":

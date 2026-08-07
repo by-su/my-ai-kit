@@ -36,41 +36,75 @@ def load_mykit_bin():
 
 
 class SkillPolicyTests(unittest.TestCase):
-    def test_active_skill_items_include_defaults_and_enabled_scopes(self):
-        old_load_state = skills.load_state
+    def test_active_skill_items_include_locally_enabled_skills(self):
         old_load_local_state = skills.load_local_state
         try:
-            skills.load_state = lambda: {
-                "enabled_optionals": ["global-on"],
-                "disabled_optionals": [],
-            }
             skills.load_local_state = lambda cwd=None: {
                 "enabled_optionals": ["local-on"],
             }
 
             names = [item["name"] for item in skills.get_active_skill_items(MANIFEST)]
 
-            self.assertEqual(names, ["core-local", "default-on", "global-on", "local-on"])
+            self.assertEqual(names, ["core-local", "local-on"])
         finally:
-            skills.load_state = old_load_state
             skills.load_local_state = old_load_local_state
 
-    def test_active_skill_items_respect_disabled_defaults(self):
-        old_load_state = skills.load_state
+    def test_active_skill_items_ignore_default_enabled_without_local_enable(self):
+        # Regression guard: `default_enabled` no longer auto-activates a skill -
+        # only an explicit local `mykit enable` does.
         old_load_local_state = skills.load_local_state
         try:
-            skills.load_state = lambda: {
-                "enabled_optionals": [],
-                "disabled_optionals": ["default-on"],
-            }
             skills.load_local_state = lambda cwd=None: {"enabled_optionals": []}
 
             names = [item["name"] for item in skills.get_active_skill_items(MANIFEST)]
 
             self.assertEqual(names, ["core-local"])
         finally:
-            skills.load_state = old_load_state
             skills.load_local_state = old_load_local_state
+
+    def test_active_skill_items_include_profile_driven_skills_when_bound(self):
+        # Regression guard: cmd_sync's GitHub-prefetch step relies on this function
+        # to decide what to fetch. If a bound profile's declared enable_optionals
+        # aren't reflected here, sync_active_skills() later tries to link a skill
+        # that was never fetched, and it silently never syncs.
+        old_load_local_state = skills.load_local_state
+        old_resolve_profile_binding = skills.resolve_profile_binding
+        old_get_active_profile = skills.get_active_profile
+        old_get_profile_enable_optionals = skills.get_profile_enable_optionals
+        try:
+            skills.load_local_state = lambda cwd=None: {"enabled_optionals": []}
+            skills.resolve_profile_binding = lambda cwd: "custom:pm"
+            skills.get_active_profile = lambda cwd=None: "custom:pm"
+            skills.get_profile_enable_optionals = lambda profile: ["global-on"]
+
+            names = [item["name"] for item in skills.get_active_skill_items(MANIFEST)]
+
+            self.assertEqual(names, ["core-local", "global-on"])
+        finally:
+            skills.load_local_state = old_load_local_state
+            skills.resolve_profile_binding = old_resolve_profile_binding
+            skills.get_active_profile = old_get_active_profile
+            skills.get_profile_enable_optionals = old_get_profile_enable_optionals
+
+    def test_active_skill_items_ignore_profile_driven_skills_when_unbound(self):
+        old_load_local_state = skills.load_local_state
+        old_resolve_profile_binding = skills.resolve_profile_binding
+        old_get_active_profile = skills.get_active_profile
+        old_get_profile_enable_optionals = skills.get_profile_enable_optionals
+        try:
+            skills.load_local_state = lambda cwd=None: {"enabled_optionals": []}
+            skills.resolve_profile_binding = lambda cwd: None
+            skills.get_active_profile = lambda cwd=None: "custom:pm"
+            skills.get_profile_enable_optionals = lambda profile: ["global-on"]
+
+            names = [item["name"] for item in skills.get_active_skill_items(MANIFEST)]
+
+            self.assertEqual(names, ["core-local"])
+        finally:
+            skills.load_local_state = old_load_local_state
+            skills.resolve_profile_binding = old_resolve_profile_binding
+            skills.get_active_profile = old_get_active_profile
+            skills.get_profile_enable_optionals = old_get_profile_enable_optionals
 
     def test_active_skill_items_include_all(self):
         names = [item["name"] for item in skills.get_active_skill_items(MANIFEST, include_all=True)]
@@ -230,11 +264,12 @@ class SetupSelectionTests(unittest.TestCase):
                 "Languages and stacks (DevOps & Cloud)",
                 "Languages and stacks (AI & Data)",
                 "Languages and stacks (Role / Stage)",
-                "Global optional skills to enable",
                 "Auto-enable these skills whenever this profile is selected",
                 "MCP servers to enable",
             ])
-            self.assertEqual(saved_state["active_profile"], "custom:backend-api")
+            # Creating a profile through the wizard must not silently flip the
+            # machine's global default profile - that requires `use --global`.
+            self.assertNotIn("active_profile", saved_state)
             self.assertEqual(saved_state["custom_profile_name"], "backend-api")
             self.assertEqual(saved_state["profile_keywords"], ["python"])
             self.assertEqual(saved_state["enabled_pruning_packs"], [])
@@ -260,9 +295,9 @@ class SetupSelectionTests(unittest.TestCase):
             (set(), "next"),
             (set(), "next"),
             (set(), "next"),
-            ({"pm-skills"}, "next"),
-            ({"pm-skills", "pm-pdlc-conductor"}, "next"),
-            (set(), "next"),
+            ({"pm-skills", "pm-pdlc-conductor"}, "next"),  # profile_enable_optionals
+            (set(), "next"),  # mcps (pruning_packs is skipped: no PRUNABLE_PACKS selected above)
+            (set(), "next"),  # unused
         ])
 
         class MissingStateFile:
@@ -304,6 +339,76 @@ class SetupSelectionTests(unittest.TestCase):
                 saved_state["custom_profiles"]["pm"]["enable_optionals"],
                 ["pm-pdlc-conductor", "pm-skills"],
             )
+        finally:
+            mykit.load_manifest = old_load_manifest
+            mykit.load_state = old_load_state
+            mykit.save_state = old_save_state
+            mykit.STATE_FILE = old_state_file
+            mykit.prompt_custom_profile_name = old_prompt_name
+            mykit.prompt_setup_selection = old_prompt_selection
+            mykit.cmd_sync = old_cmd_sync
+
+    def test_setup_wizard_shows_pruning_step_only_for_selected_prunable_packs(self):
+        # Regression guard: the pruning step must not appear (or pre-check anything)
+        # unless the user actually selected a PRUNABLE_PACKS skill in the preceding
+        # "Auto-enable" step - it must never show up unprompted.
+        mykit = load_mykit_bin()
+        saved_state = {}
+        seen_titles = []
+        responses = iter([
+            ({"python"}, "next"),
+            (set(), "next"),
+            (set(), "next"),
+            (set(), "next"),
+            (set(), "next"),
+            (set(), "next"),
+            (set(), "next"),
+            (set(), "next"),
+            ({"ecc-suite"}, "next"),  # profile_enable_optionals
+            ({"ecc-suite"}, "next"),  # pruning_packs (now shown, since ecc-suite was selected above)
+            (set(), "next"),  # mcps
+        ])
+
+        class MissingStateFile:
+            def exists(self):
+                return False
+
+        old_load_manifest = mykit.load_manifest
+        old_load_state = mykit.load_state
+        old_save_state = mykit.save_state
+        old_state_file = mykit.STATE_FILE
+        old_prompt_name = mykit.prompt_custom_profile_name
+        old_prompt_selection = mykit.prompt_setup_selection
+        old_cmd_sync = mykit.cmd_sync
+        try:
+            mykit.load_manifest = lambda: {
+                "optional": [
+                    {"name": "ecc-suite", "description": "ECC skills"},
+                    {"name": "promptfoo", "description": "Prompt evals"},
+                ],
+                "global": {"mcp_servers": {}},
+            }
+            mykit.load_state = lambda: {}
+            mykit.save_state = lambda state: saved_state.update(state)
+            mykit.STATE_FILE = MissingStateFile()
+            mykit.prompt_custom_profile_name = lambda default: "backend"
+
+            def prompt_selection(title, items, default, single=False, **kwargs):
+                seen_titles.append(title)
+                if title.startswith("Prune these skill packs"):
+                    # promptfoo isn't prunable, so it must never appear here.
+                    self.assertEqual(set(items.keys()), {"ecc-suite"})
+                return next(responses)
+
+            mykit.prompt_setup_selection = prompt_selection
+            mykit.cmd_sync = lambda: None
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                mykit.cmd_setup()
+
+            pruning_titles = [t for t in seen_titles if t.startswith("Prune these skill packs")]
+            self.assertEqual(len(pruning_titles), 1)
+            self.assertEqual(saved_state["enabled_pruning_packs"], ["ecc-suite"])
         finally:
             mykit.load_manifest = old_load_manifest
             mykit.load_state = old_load_state
@@ -377,11 +482,12 @@ class SetupSelectionTests(unittest.TestCase):
                 "Languages and stacks (DevOps & Cloud)",
                 "Languages and stacks (AI & Data)",
                 "Languages and stacks (Role / Stage)",
-                "Global optional skills to enable",
                 "Auto-enable these skills whenever this profile is selected",
                 "MCP servers to enable",
             ])
-            self.assertEqual(saved_state["active_profile"], "custom:personal")
+            # Editing an existing profile through the wizard must not touch the
+            # machine's global default profile either.
+            self.assertEqual(saved_state["active_profile"], "personal")
             self.assertEqual(saved_state["custom_profiles"]["personal"]["include"], ["python"])
         finally:
             mykit.load_manifest = old_load_manifest
@@ -451,11 +557,11 @@ class SetupSelectionTests(unittest.TestCase):
                 "Languages and stacks (DevOps & Cloud)",
                 "Languages and stacks (AI & Data)",
                 "Languages and stacks (Role / Stage)",
-                "Global optional skills to enable",
                 "Auto-enable these skills whenever this profile is selected",
                 "MCP servers to enable",
             ])
-            self.assertEqual(saved_state["active_profile"], "custom:custom")
+            # Wizard save must not touch the machine's global default profile.
+            self.assertEqual(saved_state["active_profile"], "custom")
             self.assertEqual(saved_state["profile_keywords"], ["python"])
         finally:
             mykit.load_manifest = old_load_manifest
@@ -806,7 +912,7 @@ class SetupSelectionTests(unittest.TestCase):
             mykit.cmd_sync = old_cmd_sync
             tmp.cleanup()
 
-    def test_profile_use_global_flag_switches_machine_default_and_enables_optionals(self):
+    def test_profile_use_global_flag_switches_machine_default_profile(self):
         mykit = load_mykit_bin()
         saved_state = {}
 
@@ -815,6 +921,7 @@ class SetupSelectionTests(unittest.TestCase):
         old_save_state = mykit.save_state
         old_get_active_profile = mykit.get_active_profile
         old_cmd_sync = mykit.cmd_sync
+        old_warn_active_global_runtime_sessions = mykit.warn_active_global_runtime_sessions
         try:
             mykit.load_manifest = lambda: {
                 "optional": [{"name": "pm-skills"}, {"name": "pm-pdlc-conductor"}],
@@ -826,23 +933,31 @@ class SetupSelectionTests(unittest.TestCase):
                     }
                 },
             }
-            mykit.load_state = lambda: {"active_profile": "personal", "enabled_optionals": []}
+            mykit.load_state = lambda: {"active_profile": "personal"}
             mykit.save_state = lambda state: saved_state.update(state)
             mykit.get_active_profile = lambda: "personal"
             mykit.cmd_sync = lambda: None
+            # This reads a real, un-mocked global sessions file otherwise, so whether
+            # the switch proceeds depends on the machine's incidental session state.
+            mykit.warn_active_global_runtime_sessions = lambda: True
 
             with contextlib.redirect_stdout(io.StringIO()):
                 mykit.cmd_profile(["use", "pm", "--global"])
 
             self.assertEqual(saved_state["active_profile"], "custom:pm")
-            self.assertIn("pm-skills", saved_state["enabled_optionals"])
-            self.assertIn("pm-pdlc-conductor", saved_state["enabled_optionals"])
+            # The profile's declared enable_optionals still carries over onto the
+            # custom profile record - it just no longer flips a global on/off switch.
+            self.assertEqual(
+                sorted(saved_state["custom_profiles"]["pm"]["enable_optionals"]),
+                ["pm-pdlc-conductor", "pm-skills"],
+            )
         finally:
             mykit.load_manifest = old_load_manifest
             mykit.load_state = old_load_state
             mykit.save_state = old_save_state
             mykit.get_active_profile = old_get_active_profile
             mykit.cmd_sync = old_cmd_sync
+            mykit.warn_active_global_runtime_sessions = old_warn_active_global_runtime_sessions
 
     def test_profile_edit_delete_option(self):
         mykit = load_mykit_bin()
@@ -904,23 +1019,37 @@ class SetupSelectionTests(unittest.TestCase):
 
 class DedupeScopeTests(unittest.TestCase):
     def test_dedupe_scope_defaults_to_active_skills(self):
-        old_load_state = dedupe.load_state
         old_load_local_state = dedupe.load_local_state
         try:
-            dedupe.load_state = lambda: {
-                "enabled_optionals": ["global-on"],
-                "disabled_optionals": ["default-on"],
-            }
             dedupe.load_local_state = lambda cwd=None: {
                 "enabled_optionals": ["local-on"],
             }
 
             names = [item["name"] for item in dedupe.get_dedupe_skill_items(MANIFEST)]
 
-            self.assertEqual(names, ["core-local", "global-on", "local-on"])
+            self.assertEqual(names, ["core-local", "local-on"])
         finally:
-            dedupe.load_state = old_load_state
             dedupe.load_local_state = old_load_local_state
+
+    def test_dedupe_scope_includes_profile_driven_skills_when_bound(self):
+        old_load_local_state = dedupe.load_local_state
+        old_resolve_profile_binding = dedupe.resolve_profile_binding
+        old_get_active_profile = dedupe.get_active_profile
+        old_get_profile_enable_optionals = dedupe.get_profile_enable_optionals
+        try:
+            dedupe.load_local_state = lambda cwd=None: {"enabled_optionals": []}
+            dedupe.resolve_profile_binding = lambda cwd: "custom:pm"
+            dedupe.get_active_profile = lambda cwd=None: "custom:pm"
+            dedupe.get_profile_enable_optionals = lambda profile: ["global-on"]
+
+            names = [item["name"] for item in dedupe.get_dedupe_skill_items(MANIFEST)]
+
+            self.assertEqual(names, ["core-local", "global-on"])
+        finally:
+            dedupe.load_local_state = old_load_local_state
+            dedupe.resolve_profile_binding = old_resolve_profile_binding
+            dedupe.get_active_profile = old_get_active_profile
+            dedupe.get_profile_enable_optionals = old_get_profile_enable_optionals
 
 
 class PrunerTests(unittest.TestCase):

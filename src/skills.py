@@ -1,6 +1,7 @@
 from pathlib import Path
 
-from src.config import load_local_state, load_state
+from src.config import get_active_profile, load_local_state, resolve_profile_binding
+from src.pruner import get_profile_enable_optionals
 
 
 def get_active_skill_items(manifest, cwd=None, include_all=False):
@@ -10,16 +11,18 @@ def get_active_skill_items(manifest, cwd=None, include_all=False):
     if cwd is None:
         cwd = Path.cwd()
 
-    state = load_state()
     local_state = load_local_state(cwd)
-    global_enabled = set(state.get("enabled_optionals", []))
     local_enabled = set(local_state.get("enabled_optionals", []))
-    disabled = set(state.get("disabled_optionals", []))
+
+    # A skill a bound profile declares via `enable_optionals` is just as "active"
+    # as one enabled with `mykit enable` - sync_active_skills() (symlink.py) treats
+    # them the same way, so this must too or profile-driven skills never get fetched.
+    is_bound = resolve_profile_binding(cwd) is not None
+    profile_enabled = set(get_profile_enable_optionals(get_active_profile(cwd))) if is_bound else set()
 
     items = list(manifest.get("core", []))
     for item in manifest.get("optional", []):
         name = item.get("name")
-        is_default = item.get("default_enabled", False)
-        if name in local_enabled or name in global_enabled or (is_default and name not in disabled):
+        if name in local_enabled or name in profile_enabled:
             items.append(item)
     return items

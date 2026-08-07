@@ -67,9 +67,9 @@ Should NOT trigger:
 Before recommending any downstream skill, confirm the phase skills
 (`discover-*`, `define-*`, `develop-*`, `deliver-*`, `measure-*`,
 `iterate-*`, `foundation-*`) actually exist in the current skill listing. If
-they are not installed, tell the user to run `mykit install pm-skills` (or
-`--global`) first, and stop -- never invent or approximate a skill name that
-isn't confirmed to exist.
+they are not installed, tell the user to run `mykit install pm-skills` first,
+and stop -- never invent or approximate a skill name that isn't confirmed to
+exist.
 
 ## The six phases (from pm-skills' `_workflows/triple-diamond.md`)
 

@@ -12,9 +12,8 @@
 | 명령어 | 설명 |
 | :--- | :--- |
 | `mykit list` | 활성화된 스택 프로필, MCP 서버, 커스텀 서브 에이전트(`agents/*.md`), Core 및 Local 스킬 조회 |
-| `mykit setup` | 초기 셋업 마법사로 profile 생성/선택, pruning 언어/스택, 전역 Optional 스킬, 선택한 팩의 pruning 여부, MCP 선택 |
+| `mykit setup` | 초기 셋업 마법사로 profile 생성/선택, pruning 언어/스택, 프로필별 자동 활성화 스킬, 선택한 팩의 pruning 여부, MCP 선택 |
 | `mykit install <skill-name>` | **현재 작업 중인 프로젝트 디렉터리(`pwd`)** 내부로 Optional 스킬 설치 및 **자동 중복 스캔 훅(Auto-Dedupe Hook) 연동** |
-| `mykit install <skill-name> --global` | Optional 스킬을 전역(Global) 스코프로 설치 및 **자동 중복 스캔 훅 연동** |
 | `mykit remove <skill-name>` | 현재 작업 중인 프로젝트 디렉터리(`pwd`)에서 Optional 스킬 제거 |
 | `mykit stats` | 시스템 전체 통계 대시보드 (스킬 감축률, 토큰 절약량, 에이전트 연결 현황) |
 | `mykit env setup` | MCP API 키 및 시크릿 인터랙티브 자동 대화형 등록 마법사 |
@@ -136,7 +135,7 @@ mykit profile remove <profile-name>
 
 `mykit profile edit`는 profile 생성/수정 및 스킬/MCP 셋업을 진행하며, `mykit profile remove`는 지정한 커스텀 profile을 삭제합니다. runtime까지 함께 지우려면 `mykit profile remove <profile> --purge-runtime`을 사용합니다. 초기화 백업에는 `manifest.json`이 포함되며, 백업 디렉터리는 사용자 전용 권한으로 생성됩니다.
 
-`./bootstrap.sh`를 대화형으로 실행하면 전역 설정을 profile별로 격리할지 묻습니다. 동의하면 기존 `~/.claude`, `~/.codex`, Antigravity의 `~/.gemini/antigravity-cli`, `~/.gemini/config`, `~/.gemini/skills`, `~/.gemini/agents`와 skill store를 `~/.agent-skills/legacy/<timestamp>/`로 백업하고, 현재 profile 전용 runtime을 활성화합니다. 이후 `mykit profile use <profile> --global`로 전환하면 skill, agent, settings, hooks, MCP가 함께 전환됩니다. 비대화형 실행에서는 기존 공유 전역 runtime을 유지합니다.
+`./bootstrap.sh`를 대화형으로 실행하면 전역 설정을 profile별로 격리할지 묻습니다 — `[a]` 모든 profile을 각자 격리, `[o]` 지정한 owner profile 하나만 실제 전역 경로(`~/.claude` 등)를 그대로 쓰고 나머지 profile만 각자 격리, `[n]` 격리 안 함(기본값) 중 선택합니다. `[a]`나 `[o]`를 고르면 기존 `~/.claude`, `~/.codex`, Antigravity의 `~/.gemini/antigravity-cli`, `~/.gemini/config`, `~/.gemini/skills`, `~/.gemini/agents`와 skill store를 `~/.agent-skills/legacy/<timestamp>/`로 백업하고, 현재 profile 전용 runtime을 활성화합니다. 이후 `mykit profile use <profile> --global`로 전환하면 skill, agent, settings, hooks, MCP가 함께 전환됩니다(단, owner profile이 활성일 땐 실제 전역 경로를 그대로 씀). 비대화형 실행에서는 기존 공유 전역 runtime을 유지합니다.
 
 기존 설치를 이미 완료한 뒤 격리를 시작하려면 `mykit clean-global`을 사용할 수 있습니다. 이 명령은 현재 전역 profile runtime을 초기화하고 기존 데이터를 백업합니다.
 
@@ -181,9 +180,9 @@ mykit install prompt-architect
 ./bootstrap.sh
 ```
 
-기본 bootstrap/sync는 `default_enabled: true`이거나 직접 설치한 활성 스킬만 다운로드합니다. 비활성 Optional 스킬까지 모두 받아두려면 `mykit sync --all` 또는 `mykit prefetch --all`을 명시적으로 실행하세요.
+기본 bootstrap/sync는 로컬에서 직접 설치했거나(`mykit install <skill>`) 바인딩된 profile이 `enable_optionals`로 선언한 활성 스킬만 다운로드합니다. 비활성 Optional 스킬까지 모두 받아두려면 `mykit sync --all` 또는 `mykit prefetch --all`을 명시적으로 실행하세요.
 
-`./bootstrap.sh`를 터미널에서 직접 실행하면 `mykit setup`이 열려 profile 생성/선택, pruning 언어/스택, 전역 Optional 스킬, 선택한 팩의 pruning 여부, MCP 서버를 선택합니다. 첫 setup은 profile을 반드시 하나 생성하고, 아무 언어도 미리 선택하지 않습니다. Pruning 질문은 `ecc-suite` 또는 `mengto-skills`를 전역 Optional로 선택했을 때만 표시됩니다. `↑/↓`로 이동하고 Space 또는 클릭으로 선택을 토글한 뒤 Enter로 다음 단계로 이동합니다. `b`로 이전 단계로 돌아가고, `q`/Esc로 취소합니다. 파이프/CI처럼 비대화형으로 실행될 때는 기존처럼 기본값으로 `mykit sync`만 실행합니다.
+`./bootstrap.sh`를 터미널에서 직접 실행하면 `mykit setup`이 열려 profile 생성/선택, pruning 언어/스택, 이 profile을 쓸 때 자동 활성화할 스킬, 선택한 팩의 pruning 여부, MCP 서버를 선택합니다. 첫 setup은 profile을 반드시 하나 생성하고, 아무 언어도 미리 선택하지 않습니다. Pruning 질문은 `ecc-suite` 또는 `mengto-skills`를 프로필 자동 활성화 스킬로 선택했을 때만 표시됩니다. `↑/↓`로 이동하고 Space 또는 클릭으로 선택을 토글한 뒤 Enter로 다음 단계로 이동합니다. `b`로 이전 단계로 돌아가고, `q`/Esc로 취소합니다. 파이프/CI처럼 비대화형으로 실행될 때는 기존처럼 기본값으로 `mykit sync`만 실행합니다.
 
 설정 저장 직후 `mykit setup`은 **mykit이 관리하는 콘텐츠와 겹치는 Claude Code 플러그인이 켜져 있는지도 확인**합니다. 예를 들어 `ecc@ecc` 마켓플레이스 플러그인(`affaan-m/ECC`)은 mykit의 `ecc-suite` 팩(`affaan-m/everything-claude-code`)과 같은 계열 콘텐츠를 profile 구분 없이 통째로 로드합니다 — 그래서 `pm` 같은 좁은 profile을 쓰고 있어도 이 플러그인이 켜져 있으면 관련 없는 `ecc:*` 스킬이 잔뜩 보이는 문제가 생깁니다(plugin은 mykit profile pruning의 통제 범위 밖이라 항상 전체가 로드됨). 이런 충돌이 감지되면 끌지 물어보고, `[Y/n]`에서 엔터만 눌러도 기본으로 비활성화합니다. `~/.claude/settings.json`의 `enabledPlugins`에 반영되며, 적용은 다음 세션부터입니다.
 

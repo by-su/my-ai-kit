@@ -1,8 +1,7 @@
-import os
-import sys
 import re
 from pathlib import Path
-from src.config import load_manifest, load_state, load_local_state
+from src.config import get_active_profile, load_manifest, load_local_state, resolve_profile_binding
+from src.pruner import get_profile_enable_optionals
 from src.symlink import resolve_skill_path
 
 def extract_tokens(text):
@@ -24,17 +23,21 @@ def get_dedupe_skill_items(manifest, include_all=False, cwd=None):
     if include_all:
         return manifest.get("core", []) + manifest.get("optional", [])
 
-    state = load_state()
+    if cwd is None:
+        cwd = Path.cwd()
+
     local_state = load_local_state(cwd)
-    global_enabled = set(state.get("enabled_optionals", []))
     local_enabled = set(local_state.get("enabled_optionals", []))
-    disabled = set(state.get("disabled_optionals", []))
+
+    # Mirror sync_active_skills()/get_active_skill_items(): a bound profile's
+    # declared enable_optionals are just as "active" as a local `mykit enable`.
+    is_bound = resolve_profile_binding(cwd) is not None
+    profile_enabled = set(get_profile_enable_optionals(get_active_profile(cwd))) if is_bound else set()
 
     items = list(manifest.get("core", []))
     for item in manifest.get("optional", []):
         name = item.get("name")
-        is_default = item.get("default_enabled", False)
-        if name in local_enabled or name in global_enabled or (is_default and name not in disabled):
+        if name in local_enabled or name in profile_enabled:
             items.append(item)
     return items
 
@@ -42,7 +45,7 @@ def run_dedupe(threshold=40.0, focus_skill=None, include_all=False, cwd=None):
     manifest = load_manifest()
     all_skills = get_dedupe_skill_items(manifest, include_all=include_all, cwd=cwd)
     
-    print(f"\033[1;36m🔍 Running mykit dedupe (Semantic Overlap Detector)...\033[0m")
+    print("\033[1;36m🔍 Running mykit dedupe (Semantic Overlap Detector)...\033[0m")
     print(f"Similarity Threshold: {threshold}%\n")
 
     skill_tokens = {}

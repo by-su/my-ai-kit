@@ -1,5 +1,4 @@
 import subprocess
-from pathlib import Path
 from src.config import CACHE_DIR, load_lockfile, save_lockfile
 
 def fetch_skill_repo(name, url, commit_sha=None, auto_update=False):
@@ -30,7 +29,7 @@ def fetch_skill_repo(name, url, commit_sha=None, auto_update=False):
         }
         save_lockfile(lockfile)
         return current_sha
-    except subprocess.CalledProcessError as e:
+    except subprocess.CalledProcessError:
         print(f"⚠️ Failed to fetch git repository for '{name}' ({url}). Please check if the URL exists or requires authentication.")
         return None
 
@@ -59,6 +58,6 @@ def update_skill_repo(name, url):
         
         print(f"✅ Updated '{name}' lockfile to commit: {current_sha[:8]}")
         return current_sha
-    except subprocess.CalledProcessError as e:
+    except subprocess.CalledProcessError:
         print(f"⚠️ Failed to update '{name}' ({url}).")
         return None

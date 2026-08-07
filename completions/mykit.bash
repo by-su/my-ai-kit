@@ -6,7 +6,7 @@ _mykit_completions() {
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-    opts="list setup stats env profile stack mcp install remove sync prefetch reset update lint dedupe doctor completion"
+    opts="list setup stats env profile stack mcp language install remove sync prefetch reset update lint dedupe doctor completion"
 
     if [ $COMP_CWORD -eq 1 ]; then
         COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
@@ -22,12 +22,16 @@ _mykit_completions() {
             COMPREPLY=( $(compgen -W "enable disable list context7 github google-docs google-slides mysql playwright memory brave-search" -- ${cur}) )
             return 0
             ;;
+        language)
+            COMPREPLY=( $(compgen -W "get set sync" -- ${cur}) )
+            return 0
+            ;;
         env)
             COMPREPLY=( $(compgen -W "setup" -- ${cur}) )
             return 0
             ;;
         install|remove|prefetch)
-            COMPREPLY=( $(compgen -W "app-store-screenshots coolify copilotkit ecc-suite inspect-ai mengto-skills openui pm-pdlc-conductor pm-skills posthog prompt-architect promptfoo screenshot-to-code shadcn-ui spec-kit storybook --global --all" -- ${cur}) )
+            COMPREPLY=( $(compgen -W "app-store-screenshots coolify copilotkit ecc-suite inspect-ai mengto-skills openui pm-pdlc-conductor pm-skills posthog prompt-architect promptfoo screenshot-to-code shadcn-ui spec-kit storybook --all" -- ${cur}) )
             return 0
             ;;
         sync|update)

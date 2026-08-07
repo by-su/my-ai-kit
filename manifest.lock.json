@@ -20,7 +20,7 @@
     },
     "spec-kit": {
       "url": "https://github.com/github/spec-kit.git",
-      "commit": "d1e86f638277a99b82715c22c90558cd58d3cffd"
+      "commit": "81d5cdbbf2c96f7ce1a2801c6185f2951f1f61be"
     },
     "promptfoo": {
       "url": "https://github.com/promptfoo/promptfoo.git",
@@ -48,7 +48,7 @@
     },
     "pm-skills": {
       "url": "https://github.com/product-on-purpose/pm-skills.git",
-      "commit": "9efff804c66183cdff0abd826d90479a673b6b31"
+      "commit": "31f38ed48fc53d3646a2d926244afa2caa62fc4c"
     }
   }
 }

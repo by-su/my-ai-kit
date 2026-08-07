@@ -1,6 +1,6 @@
 import shutil
 from pathlib import Path
-from src.config import load_manifest, load_state, KIT_DIR, SETUP_PROFILE_KEYWORDS
+from src.config import load_manifest, load_state, SETUP_PROFILE_KEYWORDS
 
 # Universal core developer utilities (keyword-based, used for SKILL pruning)
 UNIVERSAL_UTILITIES = {

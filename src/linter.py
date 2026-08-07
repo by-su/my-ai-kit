@@ -1,7 +1,4 @@
-import os
-import re
-from pathlib import Path
-from src.config import load_manifest, KIT_DIR
+from src.config import load_manifest
 from src.symlink import resolve_skill_path
 from adapters import ALL_ADAPTERS
 

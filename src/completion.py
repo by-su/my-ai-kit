@@ -1,5 +1,3 @@
-import sys
-import os
 from pathlib import Path
 from src.config import load_manifest, KIT_DIR
 
@@ -18,13 +16,14 @@ _mykit() {
             local -a commands
             commands=(
                 'list:Show status of MCPs, custom agents, core and optional skills'
-                'setup:Choose or create profile, global skills, pruning, and MCPs'
+                'setup:Choose or create profile, pruning, and MCPs'
                 'stats:View system analytics, token savings, and adapter connectivity'
                 'env:Interactive setup wizard for MCP API keys and secrets'
                 'profile:View, switch, or edit profiles'
                 'mcp:View or toggle MCP servers (enable, disable)'
-                'install:Install optional skill to pwd (or --global)'
-                'remove:Remove optional skill from pwd (or --global)'
+                'language:Get or set the preferred summary/response language'
+                'install:Install optional skill to pwd'
+                'remove:Remove optional skill from pwd'
                 'sync:Synchronize active skills, MCPs, and agents across adapters'
                 'prefetch:Download GitHub skills without enabling them'
                 'reset:Reset all agent configs and symlinks cleanly'
@@ -50,6 +49,13 @@ _mykit() {
                         local -a mcp_cmds
                         mcp_cmds=('enable' 'disable' 'list')
                         _describe -t mcp_cmds 'mcp command' mcp_cmds
+                    fi
+                    ;;
+                language)
+                    if [[ $#words -eq 3 ]]; then
+                        local -a language_cmds
+                        language_cmds=('get' 'set' 'sync')
+                        _describe -t language_cmds 'language command' language_cmds
                     fi
                     ;;
                 env)
@@ -98,7 +104,7 @@ _mykit_completions() {
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-    opts="list setup stats env profile stack mcp install remove sync prefetch reset update lint dedupe doctor completion"
+    opts="list setup stats env profile stack mcp language install remove sync prefetch reset update lint dedupe doctor completion"
 
     if [ $COMP_CWORD -eq 1 ]; then
         COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
@@ -114,12 +120,16 @@ _mykit_completions() {
             COMPREPLY=( $(compgen -W "enable disable list context7 github google-docs google-slides mysql playwright memory brave-search" -- ${cur}) )
             return 0
             ;;
+        language)
+            COMPREPLY=( $(compgen -W "get set sync" -- ${cur}) )
+            return 0
+            ;;
         env)
             COMPREPLY=( $(compgen -W "setup" -- ${cur}) )
             return 0
             ;;
         install|remove|prefetch)
-            COMPREPLY=( $(compgen -W "__OPTIONAL_SKILLS__ --global --all" -- ${cur}) )
+            COMPREPLY=( $(compgen -W "__OPTIONAL_SKILLS__ --all" -- ${cur}) )
             return 0
             ;;
         sync|update)

@@ -119,7 +119,7 @@ class UpsertManagedBlockTests(unittest.TestCase):
     def test_appends_block_to_fresh_content(self):
         block = f"{permissions.CODEX_BEGIN_MARKER}\nsandbox_mode = \"workspace-write\"\n{permissions.CODEX_END_MARKER}"
 
-        result = permissions.upsert_managed_block("", block)
+        result = permissions.upsert_managed_block("", permissions.CODEX_BEGIN_MARKER, permissions.CODEX_END_MARKER, block)
 
         self.assertEqual(result.count(permissions.CODEX_BEGIN_MARKER), 1)
         self.assertIn('sandbox_mode = "workspace-write"', result)
@@ -128,7 +128,7 @@ class UpsertManagedBlockTests(unittest.TestCase):
         block = f"{permissions.CODEX_BEGIN_MARKER}\nsandbox_mode = \"workspace-write\"\n{permissions.CODEX_END_MARKER}"
         existing = '[other_table]\nfoo = "bar"\n'
 
-        result = permissions.upsert_managed_block(existing, block)
+        result = permissions.upsert_managed_block(existing, permissions.CODEX_BEGIN_MARKER, permissions.CODEX_END_MARKER, block)
 
         self.assertIn('[other_table]', result)
         self.assertIn('foo = "bar"', result)
@@ -137,8 +137,8 @@ class UpsertManagedBlockTests(unittest.TestCase):
     def test_replacing_twice_is_idempotent(self):
         block = f"{permissions.CODEX_BEGIN_MARKER}\nsandbox_mode = \"workspace-write\"\n{permissions.CODEX_END_MARKER}"
 
-        first = permissions.upsert_managed_block("", block)
-        second = permissions.upsert_managed_block(first, block)
+        first = permissions.upsert_managed_block("", permissions.CODEX_BEGIN_MARKER, permissions.CODEX_END_MARKER, block)
+        second = permissions.upsert_managed_block(first, permissions.CODEX_BEGIN_MARKER, permissions.CODEX_END_MARKER, block)
 
         self.assertEqual(first, second)
         self.assertEqual(second.count(permissions.CODEX_BEGIN_MARKER), 1)

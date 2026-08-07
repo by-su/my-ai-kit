@@ -65,26 +65,58 @@ def remove_profile_runtime(profile_name):
     return True
 
 
-def activate_profile_runtime(profile_name, migrate_legacy=False):
-    """Activate one profile's global roots, backing up legacy roots once."""
+def activate_profile_runtime(profile_name, migrate_legacy=False, owner_profile=None):
+    """Activate one profile's global roots, backing up legacy roots once.
+
+    If `owner_profile` is set, that profile is exempt from isolation: its data
+    stays (or is restored) as the real global root instead of a symlink. Every
+    other profile parks the owner's real data in the owner's own runtime dir
+    (rather than the permanent legacy backup) so switching back restores it.
+    """
+    is_owner = owner_profile is not None and profile_name == owner_profile
     backup_root = _new_backup_dir() if migrate_legacy else None
     changes = []
     backup_entries = []
 
     for tool_name, global_root in RUNTIME_ROOTS.items():
+        if is_owner:
+            if global_root.is_symlink():
+                global_root.unlink()
+                parked = profile_runtime_dir(owner_profile, tool_name)
+                if parked.exists():
+                    shutil.move(str(parked), str(global_root))
+                else:
+                    global_root.mkdir(parents=True, exist_ok=True)
+                changes.append((tool_name, global_root, global_root))
+            continue
+
         target = profile_runtime_dir(profile_name, tool_name)
         target.parent.mkdir(parents=True, exist_ok=True)
+        os.chmod(target.parent, 0o700)
         target.mkdir(parents=True, exist_ok=True)
+        os.chmod(target, 0o700)
 
         if global_root.is_symlink():
             if global_root.resolve() == target.resolve():
                 continue
             global_root.unlink()
         elif global_root.exists():
-            if not migrate_legacy:
+            if owner_profile:
+                # Real data here belongs to the owner profile - park it in its
+                # own runtime dir instead of archiving it, so switching back
+                # to the owner restores it.
+                owner_park = profile_runtime_dir(owner_profile, tool_name)
+                owner_park.parent.mkdir(parents=True, exist_ok=True)
+                os.chmod(owner_park.parent, 0o700)
+                if owner_park.exists():
+                    shutil.rmtree(owner_park)
+                shutil.move(str(global_root), str(owner_park))
+                os.chmod(owner_park, 0o700)
+            elif not migrate_legacy:
                 raise FileExistsError(f"Existing global runtime root: {global_root}")
-            shutil.move(str(global_root), str(backup_root / tool_name))
-            backup_entries.append({"source": str(global_root), "backup": str(backup_root / tool_name)})
+            else:
+                shutil.move(str(global_root), str(backup_root / tool_name))
+                backup_entries.append({"source": str(global_root), "backup": str(backup_root / tool_name)})
 
         global_root.parent.mkdir(parents=True, exist_ok=True)
         global_root.symlink_to(target, target_is_directory=True)

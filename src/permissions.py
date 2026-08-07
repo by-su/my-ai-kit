@@ -97,13 +97,15 @@ def neutralize_conflicting_keys(lines: list, keys: tuple) -> list:
     return result
 
 
-def upsert_managed_block(content: str, block_body: str) -> str:
+def upsert_managed_block(content: str, begin_marker: str, end_marker: str, block_body: str, anchor: str = None) -> str:
     pattern = re.compile(
-        re.escape(CODEX_BEGIN_MARKER) + r".*?" + re.escape(CODEX_END_MARKER),
+        r"[ \t]*" + re.escape(begin_marker) + r".*?" + re.escape(end_marker),
         re.DOTALL,
     )
     if pattern.search(content):
-        return pattern.sub(block_body, content)
+        return pattern.sub(lambda m: block_body, content)
+    if anchor and anchor in content:
+        return content.replace(anchor, anchor + "\n" + block_body, 1)
     if content and not content.endswith("\n"):
         content += "\n"
     if content:
@@ -119,7 +121,7 @@ def sync_codex_config(sandbox_mode: str, approval_policy: str) -> str:
     if content.endswith("\n") and neutralized and not neutralized.endswith("\n"):
         neutralized += "\n"
     block = render_codex_block(sandbox_mode, approval_policy)
-    new_content = upsert_managed_block(neutralized, block)
+    new_content = upsert_managed_block(neutralized, CODEX_BEGIN_MARKER, CODEX_END_MARKER, block)
     CODEX_CONFIG.write_text(new_content, encoding="utf-8")
     return f"Configured sandbox_mode/approval_policy -> {CODEX_CONFIG}"
 

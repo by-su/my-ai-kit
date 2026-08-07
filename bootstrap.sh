@@ -100,6 +100,10 @@ if [ "$SETUP_AGENT_INSTRUCTIONS" -eq 1 ]; then
     run_cmd cp "$SCRIPT_DIR/AGENTS.md" "$HOME/.codex/instructions.md"
     run_cmd cp "$SCRIPT_DIR/AGENTS.md" "$HOME/.codex/AGENTS.md"
     echo "✓ Global Karpathy guidelines deployed to active profile runtime"
+
+    # Re-apply the preferred summary language now that the instruction files above
+    # exist (mykit setup|sync ran earlier, before these files were deployed).
+    run_cmd "$MYKIT_BIN" language sync
 fi
 
 echo ""

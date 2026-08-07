@@ -118,17 +118,13 @@ def sync_active_skills(cwd=None):
         cwd = Path.cwd()
 
     manifest = load_manifest()
-    state = load_state()
     local_state = load_local_state(cwd)
     active_profile = get_active_profile(cwd)
     is_bound = resolve_profile_binding(cwd) is not None
 
-    global_enabled_optionals = state.get("enabled_optionals", [])
     local_enabled_optionals = local_state.get("enabled_optionals", [])
-    # Only auto-activate a profile's declared optionals as *local* when cwd is explicitly
-    # bound to that profile. For the plain global case, enable_optionals_for_profile()
-    # (called from `mykit profile use --global`) already persisted them into
-    # state["enabled_optionals"], so they flow through global_enabled_optionals below.
+    # A profile's declared optionals only auto-activate as *local* when cwd is explicitly
+    # bound to that profile.
     profile_optionals = set(get_profile_enable_optionals(active_profile)) if is_bound else set()
 
     # Track which local skill/agent names exist *because* the active profile put them
@@ -163,18 +159,13 @@ def sync_active_skills(cwd=None):
     # 2. Optional skills -> Link to Global or Local pwd
     for item in manifest.get("optional", []):
         name = item.get("name")
-        is_default = item.get("default_enabled", False)
         path = resolve_skill_path(item, active_profile=active_profile)
 
         if not path or not path.exists():
             continue
 
-        is_prunable_bound = is_bound and name in PRUNABLE_PACKS
-        is_profile_driven = (name in profile_optionals) or is_prunable_bound
+        is_profile_driven = name in profile_optionals
         is_local_active = (name in local_enabled_optionals) or is_profile_driven
-        is_global_active = (not is_prunable_bound) and (
-            (name in global_enabled_optionals) or (is_default and name not in state.get("disabled_optionals", []))
-        )
 
         sub_map = find_skills_map(name, path)
         pack_agents = find_pack_agents(path, fetched_name=name, active_profile=active_profile)
@@ -194,15 +185,6 @@ def sync_active_skills(cwd=None):
                     newly_profile_linked_agents.add(agent_file.stem)
                 for adapter in ALL_ADAPTERS:
                     _, msg = adapter.link_agent(agent_file.stem, agent_file, is_local=True, cwd=cwd)
-                    results.append(msg)
-        elif is_global_active:
-            for s_name, s_path in sub_map.items():
-                for adapter in ALL_ADAPTERS:
-                    _, msg = adapter.link_skill(s_name, s_path, is_local=False)
-                    results.append(msg)
-            for agent_file in pack_agents:
-                for adapter in ALL_ADAPTERS:
-                    _, msg = adapter.link_agent(agent_file.stem, agent_file, is_local=False)
                     results.append(msg)
 
     # 2.5 Unlink local skills/agents the *previous* profile added that the current
